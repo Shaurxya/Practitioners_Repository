@@ -1,0 +1,54 @@
+# Local PostgreSQL for verification-service.
+#
+# The app itself runs on your machine (via mvnw), not in here, so you keep
+# hot reload and a debugger. This file only provides the database.
+#
+#   docker compose up -d       start in the background
+#   docker compose ps          check health
+#   docker compose down        stop, keep the data
+#   docker compose down -v     stop and wipe the data
+
+name: verification-service
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: verification-postgres
+    # Comes back automatically after a Docker Desktop or machine restart,
+    # but not if you stopped it yourself with `docker compose down`.
+    restart: unless-stopped
+
+    environment:
+      # The official Postgres image reads these on FIRST START ONLY, when it
+      # initialises an empty data directory. Changing them later does nothing
+      # until you `docker compose down -v` and let it initialise again.
+      POSTGRES_DB: verification
+      POSTGRES_USER: verification
+      POSTGRES_PASSWORD: verification
+
+    ports:
+      # host:container. 5433 on the host on purpose: if you already have
+      # Postgres installed on Windows it owns 5432, and "localhost:5432" would
+      # silently resolve to that one instead of this container.
+      # Inside the container it is still the normal 5432.
+      - "5433:5432"
+
+    volumes:
+      # Named volume, managed by Docker. Survives `down`, removed by `down -v`.
+      # A bind mount to a Windows folder would be slower and hits file
+      # permission problems, so a named volume is the right default here.
+      - postgres-data:/var/lib/postgresql/data
+
+    healthcheck:
+      # "Container started" and "Postgres accepts connections" are different
+      # moments, several seconds apart. pg_isready tests the second one, which
+      # is the one that matters. `docker compose ps` shows (healthy) only once
+      # this passes.
+      test: ["CMD-SHELL", "pg_isready -U verification -d verification"]
+      interval: 5s      # how often to run the check
+      timeout: 5s       # how long one check may take before counting as failed
+      retries: 10       # consecutive failures before the container is unhealthy
+      start_period: 10s # grace window at boot where failures do not count
+
+volumes:
+  postgres-data:

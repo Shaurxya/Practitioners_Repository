@@ -1,0 +1,115 @@
+/*
+  Design tokens. Semantic names only: components reference --color-surface,
+  never a raw hex value or a numbered palette step. Retheming then means
+  editing this file and nothing else.
+
+  Tailwind v4 reads @theme and generates utilities from it, so
+  --color-surface here becomes bg-surface, text-surface, border-surface.
+
+  Two consumers with opposite priorities share these colours:
+  the review console is a dense desktop tool used all day, the practitioner
+  portal is used once a year on a phone. Colour is shared, density is not.
+*/
+@theme {
+  /* neutrals, Linear / Vercel / Raycast register: near black on near white */
+  --color-canvas: oklch(99% 0 0);
+  --color-surface: oklch(100% 0 0);
+  --color-surface-raised: oklch(97.5% 0 0);
+  --color-border: oklch(92% 0 0);
+  --color-border-strong: oklch(85% 0 0);
+
+  --color-content: oklch(20% 0 0);
+  --color-content-muted: oklch(52% 0 0);
+  --color-content-subtle: oklch(65% 0 0);
+
+  /* one accent, no gradients */
+  --color-accent: oklch(55% 0.16 250);
+  --color-accent-hover: oklch(48% 0.16 250);
+  --color-accent-content: oklch(99% 0 0);
+
+  /* status, mapped to case outcomes rather than to colour names */
+  --color-verified: oklch(60% 0.14 155);
+  --color-pending: oklch(70% 0.14 75);
+  --color-review: oklch(65% 0.15 55);
+  --color-rejected: oklch(58% 0.19 25);
+
+  /* Soft backgrounds for status chips. A chip filled with the full status
+     colour fails contrast against the label, so the fill is a tint and the
+     text stays --color-content. */
+  --color-verified-soft: oklch(95% 0.04 155);
+  --color-pending-soft: oklch(96% 0.04 75);
+  --color-review-soft: oklch(96% 0.05 55);
+  --color-rejected-soft: oklch(95% 0.04 25);
+
+  /* Focus. Keyboard first means this is a primary token, not an afterthought:
+     the console is designed to be cleared without touching the mouse. */
+  --color-focus: oklch(62% 0.19 250);
+
+  /* Destructive intent, deliberately separate from --color-rejected.
+     A reject button and a rejected badge are different things, and sharing a
+     token means you cannot restyle one without the other. */
+  --color-danger: oklch(55% 0.2 25);
+  --color-danger-hover: oklch(48% 0.2 25);
+  --color-danger-content: oklch(99% 0 0);
+
+  /* The claim versus registry comparison. These three carry the whole diff
+     reading, so they are tokens rather than utility classes chosen per view. */
+  --color-diff-changed: oklch(96% 0.05 75);
+  --color-diff-changed-border: oklch(70% 0.14 75);
+  --color-diff-missing: oklch(96% 0.02 25);
+
+  /* Dense table row states. */
+  --color-row-hover: oklch(97% 0 0);
+  --color-row-selected: oklch(95% 0.03 250);
+
+  /* Type scale, shifted down from web defaults. A console is read at a fixed
+     distance all day: 16px body means fewer rows per screen and more
+     scrolling per case. The portal opts back up by using text-base and above. */
+  --text-2xs: 0.6875rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.875rem;
+  --text-lg: 1rem;
+  --text-xl: 1.25rem;
+
+  /* Mono is semantic here, not decoration. Registration numbers and case IDs
+     render mono with tabular numerals, which is what lets HRB-4417-K and
+     HRB-4417-X differ at a glance instead of character by character. */
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --radius-control: 6px;
+  --radius-panel: 10px;
+}
+
+/*
+  Dark theme. Same token names, different values, so no component needs a
+  dark: variant to pick the right surface.
+
+  The tinted tokens are re-picked at low lightness rather than darkened,
+  because scaling a pale tint down turns it muddy and stops reading as a tint.
+*/
+@layer base {
+  :root[data-theme='dark'] {
+    --color-canvas: oklch(15% 0 0);
+    --color-surface: oklch(18% 0 0);
+    --color-surface-raised: oklch(22% 0 0);
+    --color-border: oklch(27% 0 0);
+    --color-border-strong: oklch(35% 0 0);
+
+    --color-content: oklch(96% 0 0);
+    --color-content-muted: oklch(72% 0 0);
+    --color-content-subtle: oklch(58% 0 0);
+
+    --color-verified-soft: oklch(28% 0.05 155);
+    --color-pending-soft: oklch(28% 0.05 75);
+    --color-review-soft: oklch(29% 0.06 55);
+    --color-rejected-soft: oklch(28% 0.06 25);
+
+    --color-diff-changed: oklch(30% 0.06 75);
+    --color-diff-changed-border: oklch(50% 0.12 75);
+    --color-diff-missing: oklch(27% 0.03 25);
+
+    --color-row-hover: oklch(22% 0 0);
+    --color-row-selected: oklch(27% 0.04 250);
+  }
+}

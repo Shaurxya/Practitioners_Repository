@@ -1,0 +1,72 @@
+# ---------------------------------------------------------------- Java / Maven
+target/
+*.class
+*.jar
+*.war
+*.ear
+
+# Crash logs the JVM drops in the working directory
+hs_err_pid*
+replay_pid*
+
+# The Maven wrapper scripts and .mvn/wrapper/maven-wrapper.properties ARE
+# committed on purpose, that is the whole point of the wrapper. Only the
+# downloaded jar, if your setup uses one, is ignored.
+.mvn/wrapper/maven-wrapper.jar
+
+# ------------------------------------------------------------- Node / frontend
+node_modules/
+dist/
+coverage/
+.vite/
+npm-debug.log*
+yarn-error.log*
+# Vitest and Vite caches
+.vitest/
+*.tsbuildinfo
+
+# --------------------------------------------------------------------- IDE
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# VS Code. Ignore personal settings, keep shared files if the team adds them.
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+
+# Eclipse and the VS Code Java extension leave these behind
+.classpath
+.project
+.settings/
+bin/
+
+# --------------------------------------------------------------------- env
+# .env.example files, if we add any, are committed. Real ones never are.
+.env
+.env.*
+!.env.example
+
+# ------------------------------------------------------------------ OS cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ------------------------------------------------------- registry source data
+# Real practitioner records are personal data. Nothing resembling the registry
+# export goes into git, ever. Put the file in data/ and it is covered.
+data/
+*.csv
+*.tsv
+*.xls
+*.xlsx
+*.parquet
+*.dump
+*.sql.gz
+# The Flyway migrations are the one kind of .sql that IS committed.
+!backend/src/main/resources/db/migration/*.sql
+# Profiler output can contain fragments of real values.
+tools/out/

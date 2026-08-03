@@ -1,0 +1,36 @@
+# =============================================================================
+# Local development only. Active because application.yml sets
+# spring.profiles.active to "local" by default.
+#
+# Anything noisy or revealing belongs here, never in application.yml.
+# =============================================================================
+
+spring:
+  jpa:
+    # Print every SQL statement Hibernate generates. Equivalent to
+    # SQLAlchemy's echo=True. Very useful while learning, far too noisy in
+    # production, which is why it is only in this file.
+    show-sql: true
+    properties:
+      hibernate:
+        # Pretty print that SQL across multiple lines instead of one long line.
+        format_sql: true
+
+logging:
+  level:
+    # DEBUG for our own code only, so the log is readable.
+    com.herbimmortal.verification: DEBUG
+    # show-sql prints the statement but writes "?" for every parameter.
+    # This logger prints the actual bound values. You will want it eventually.
+    org.hibernate.orm.jdbc.bind: TRACE
+    # Confirms which migrations Flyway found and applied, on every boot.
+    org.flywaydb: INFO
+
+management:
+  endpoint:
+    health:
+      # THE POINT OF THIS EXERCISE. Without "always", /actuator/health returns
+      # only {"status":"UP"} and you cannot tell whether the database is
+      # actually reachable. With it, the response lists a "db" component with
+      # its own status, which is the proof that the app really connected.
+      show-details: always

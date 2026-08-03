@@ -1,0 +1,12 @@
+/* Tailwind v4 entry. One import replaces the v3 @tailwind base/components/utilities. */
+@import 'tailwindcss';
+@import './tokens.css';
+
+@layer base {
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-content);
+    font-feature-settings: 'cv01', 'ss01';
+    -webkit-font-smoothing: antialiased;
+  }
+}

@@ -1,0 +1,99 @@
+# =============================================================================
+# Base configuration. Loaded in every environment.
+# application-<profile>.yml is layered on top and wins where they overlap.
+#
+# ${VAR:default} means "read environment variable VAR, fall back to default".
+# That is how the same file works on your laptop and in a real deployment.
+# =============================================================================
+
+spring:
+  application:
+    name: verification-service
+
+  # Which extra file to layer on. Override with the SPRING_PROFILES_ACTIVE
+  # environment variable, or -Dspring-boot.run.profiles=<name>.
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+
+  # ---------------------------------------------------------------------------
+  # DATASOURCE
+  # How to reach Postgres. Spring Boot builds a HikariCP connection pool from
+  # this. Nearest equivalent: SQLALCHEMY_DATABASE_URL, or a `pg` Pool config.
+  #
+  # Port 5433 matches the host side of the mapping in docker-compose.yml.
+  # ---------------------------------------------------------------------------
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/verification}
+    username: ${DB_USERNAME:verification}
+    password: ${DB_PASSWORD:verification}
+    hikari:
+      # Maximum simultaneous connections held open. 10 is plenty locally.
+      maximum-pool-size: 10
+      # Fail fast at startup instead of hanging for 30s if Postgres is down.
+      # This is what makes "database not running" an obvious error rather than
+      # a slow mysterious one.
+      connection-timeout: 5000
+
+  # ---------------------------------------------------------------------------
+  # JPA / HIBERNATE
+  # ---------------------------------------------------------------------------
+  jpa:
+    hibernate:
+      # validate = at startup, compare every @Entity against the real tables and
+      # refuse to boot if they disagree. Hibernate NEVER issues DDL.
+      # Flyway owns the schema, exclusively and permanently. See README.
+      ddl-auto: validate
+
+    # See README for the full explanation. Short version: false closes the
+    # database session when the service method returns, instead of keeping it
+    # open until the HTTP response is written.
+    open-in-view: false
+
+    properties:
+      hibernate:
+        # Tell Hibernate it is talking to Postgres without making it ask the
+        # database at startup. Saves a round trip and removes one failure mode.
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  # ---------------------------------------------------------------------------
+  # FLYWAY
+  # Runs pending migrations at startup, before Hibernate validates anything.
+  # It creates a flyway_schema_history table and records each applied file.
+  # ---------------------------------------------------------------------------
+  flyway:
+    enabled: true
+    # Where the .sql files live. "classpath:" means inside src/main/resources.
+    locations: classpath:db/migration
+    # Re-check the checksum of every already applied file on every boot. If you
+    # edit an applied migration, startup fails loudly instead of drifting.
+    validate-on-migrate: true
+
+# -----------------------------------------------------------------------------
+# APPLICATION
+# -----------------------------------------------------------------------------
+app:
+  ingest:
+    # Path is relative to the working directory, which is backend/ when you run
+    # mvnw from there. Override with APP_INGEST_FILE.
+    file: ${APP_INGEST_FILE:../data/registry_synthetic.csv}
+    # Rows per JDBC batch. See RegistryIngestionService.flush for the tradeoff.
+    batch-size: ${APP_INGEST_BATCH_SIZE:500}
+
+server:
+  port: ${SERVER_PORT:8080}
+
+# -----------------------------------------------------------------------------
+# ACTUATOR
+# Actuator has many endpoints. Exposing only health is deliberate: the others
+# (env, beans, mappings, heapdump) leak internals and must be opt in.
+# -----------------------------------------------------------------------------
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      # never / when-authorized / always. Base default is conservative,
+      # application-local.yml turns it up to always for development.
+      show-details: never
