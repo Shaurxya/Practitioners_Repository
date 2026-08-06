@@ -90,12 +90,12 @@ export function ReviewQueuePage() {
   const hasFilters = Boolean(filter.q || filter.from || filter.to)
 
   return (
-    <div className="space-y-4">
-      <header className="flex items-baseline justify-between gap-4">
-        <h1 className="text-lg font-semibold text-content">Review queue</h1>
-        <p className="text-xs text-content-muted">
+    <div className="space-y-4 pt-8">
+      <header className="flex flex-wrap items-baseline justify-between gap-4 border-b-2 border-ink pb-3">
+        <h1 className="text-heading-md font-bold tracking-tight text-content">Review queue</h1>
+        <p className="mono-label">
           {total} case{total === 1 ? '' : 's'} waiting
-          <span className="ml-3 text-content-subtle">j k to move, Enter to open, / to search</span>
+          <span className="ml-3 mono-label--faint">j k move / Enter open / slash search</span>
         </p>
       </header>
 
@@ -181,8 +181,18 @@ export function ReviewQueuePage() {
 
       {query.isSuccess && rows.length === 0 && (
         <EmptyState
-          title={hasFilters ? 'No cases match these filters.' : 'No cases waiting. The queue is clear.'}
-          body={hasFilters ? undefined : 'Everything submitted has been decided.'}
+          title={hasFilters ? 'No cases match these filters.' : 'No cases waiting.'}
+          /*
+            "Everything submitted has been decided" was stated unconditionally,
+            which on a system where nothing has ever been submitted is simply
+            untrue. Same empty table, two different facts, and the reassuring
+            one is the wrong one to guess at.
+          */
+          body={
+            hasFilters
+              ? undefined
+              : 'Claims submitted on the public site arrive here when they need a person.'
+          }
           action={
             hasFilters ? (
               <Button variant="secondary" onClick={() => update({ q: '', from: '', to: '' })}>

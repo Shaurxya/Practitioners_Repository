@@ -4,7 +4,7 @@ import { EmptyState, ErrorState, LoadingPanel, errorCopy } from '@/components/ui
 import { formatDate } from '@/lib/formatters'
 import { useMyCases } from '../hooks/useVerificationCase'
 import { outcomeCopy } from '../outcome'
-import { councilLabel } from '../councils'
+import { councilLabel, useCouncils } from '../councils'
 
 /**
  * Most practitioners have exactly one claim, so the router sends them straight
@@ -14,6 +14,10 @@ import { councilLabel } from '../councils'
 export function MyCasesPage() {
   const navigate = useNavigate()
   const query = useMyCases()
+  // Not gated on: a claim list that will not render until the council names
+  // arrive is worse than one that shows "MH" for a moment. councilLabel falls
+  // back to the code.
+  const councils = useCouncils()
 
   if (query.isPending) return <LoadingPanel label="Loading your claims" />
 
@@ -30,7 +34,7 @@ export function MyCasesPage() {
         title="You have not made a claim yet"
         body="Verify your registration to get an Immortal ID that other services can check."
         action={
-          <Button variant="primary" size="lg" onClick={() => void navigate('/')}>
+          <Button variant="primary" size="lg" onClick={() => void navigate('/submit')}>
             Start a claim
           </Button>
         }
@@ -39,24 +43,30 @@ export function MyCasesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-xl font-semibold text-content">Your claims</h1>
-      <ul className="space-y-3">
+    <div className="doc">
+      <header className="page-head page-head--ruled">
+        <p className="mono-label">
+          <span className="mark" aria-hidden="true" />
+          History
+        </p>
+        <h1>Your claims</h1>
+      </header>
+      <ul className="mt-8 border-t border-border">
         {cases.map((item) => {
           const copy = outcomeCopy(item.outcomeCode)
           return (
             <li key={item.caseId}>
               <Link
                 to={`/cases/${item.caseId}`}
-                className="block rounded-[--radius-panel] border border-border bg-surface p-4 transition-colors hover:bg-surface-raised focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none"
+                className="block border-b border-border px-1 py-4 transition-colors hover:bg-surface-raised"
               >
-                <p className="text-base font-medium text-content">{copy.headline}</p>
-                <p className="mt-1 text-sm text-content-muted">
+                <p className="text-body-md font-medium text-content">{copy.headline}</p>
+                <p className="mt-1 text-body-sm text-content-muted">
                   <span className="font-mono tabular-nums">{item.claim.registrationNumber}</span>
                   {' at '}
-                  {councilLabel(item.claim.council)}
+                  {councilLabel(item.claim.council, councils.data)}
                 </p>
-                <p className="mt-1 text-sm text-content-subtle">
+                <p className="mono-label mono-label--faint mt-1.5">
                   Submitted {formatDate(item.submittedAt)}
                 </p>
               </Link>

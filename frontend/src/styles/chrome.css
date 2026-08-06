@@ -1,0 +1,293 @@
+/*
+  Site chrome and the handful of primitives every page shares: the measure of
+  the page, the masthead, the colophon, monospace overlines and directional
+  links.
+
+  This file is global on purpose. The landing page, the portal and the console
+  used to have three different headers. They now have one, so a change to
+  navigation is a change in one place.
+*/
+
+:root {
+  --gutter: clamp(20px, 5vw, 56px);
+  --shell-width: 1180px;
+  --shell-width-narrow: 860px;
+
+  /* Short aliases for the document primitives in document.css. They point at
+     the tokens, so dark mode and any palette change flow through them. */
+  --paper: var(--color-canvas);
+  --paper-sunk: var(--color-surface-raised);
+  --ink: var(--color-ink);
+  --ink-body: var(--color-body);
+  --ink-mute: var(--color-mute);
+  --ink-faint: var(--color-ash);
+  --rule: var(--color-hairline);
+  --rule-strong: var(--color-hairline-strong);
+  --mark: var(--color-ink);
+  --mark-text: var(--color-ink);
+
+  /* Comfortable line length for running prose. */
+  --measure: 62ch;
+}
+
+/* The page measure. Every top level block sits in one of these so the left
+   edge is identical from the landing page to the review queue. */
+.shell {
+  width: 100%;
+  max-width: var(--shell-width);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+.shell--narrow {
+  max-width: var(--shell-width-narrow);
+}
+
+.shell--wide {
+  max-width: 1340px;
+}
+
+/* ---------------------------------------------------------------- overlines */
+
+.mono-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--color-mute);
+}
+
+.mono-label--faint {
+  color: var(--color-ash);
+}
+
+/* The one accent mark in the system: a small ink square. It replaces the icon
+   a heading would otherwise carry. */
+.mark {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: var(--color-ink);
+  vertical-align: 0.12em;
+  margin-right: 8px;
+}
+
+/* --------------------------------------------------------------------- links */
+
+/* A link that goes somewhere, drawn as text with a rule under it. There are no
+   filled pill buttons anywhere in the chrome. */
+.cta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--color-ink);
+  text-decoration: none;
+  border-bottom: 1px solid var(--color-ink);
+  padding-bottom: 3px;
+}
+
+.cta > span {
+  transition: transform 160ms ease;
+}
+
+.cta:hover > span {
+  transform: translateX(3px);
+}
+
+.cta--quiet {
+  color: var(--color-mute);
+  border-bottom-color: var(--color-hairline-strong);
+}
+
+.cta--quiet:hover {
+  color: var(--color-ink);
+  border-bottom-color: var(--color-ink);
+}
+
+/* ------------------------------------------------------------------ masthead */
+
+.masthead {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: color-mix(in srgb, var(--color-canvas) 88%, transparent);
+  backdrop-filter: saturate(1.1) blur(6px);
+  border-bottom: 1px solid transparent;
+  transition: border-color 160ms ease;
+}
+
+.masthead[data-stuck='true'] {
+  border-bottom-color: var(--color-hairline);
+}
+
+.masthead__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  height: 60px;
+}
+
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--color-ink);
+}
+
+.wordmark b {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.wordmark i {
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-ash);
+  border-left: 1px solid var(--color-hairline-strong);
+  padding-left: 10px;
+}
+
+.masthead nav {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.masthead nav a {
+  font-size: 13px;
+  color: var(--color-mute);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  padding-bottom: 2px;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+
+.masthead nav a:hover {
+  color: var(--color-ink);
+}
+
+/* The current section, and the primary action, are the only two links that
+   carry a rule. */
+.masthead nav a[aria-current='page'],
+.masthead nav a.is-primary {
+  color: var(--color-ink);
+  border-bottom-color: var(--color-ink);
+}
+
+/* Sign out is a button because it changes state rather than navigating, but it
+   sits in a row of links and has to read as one. Same type, same colour, same
+   hover: only the element differs, and only where it matters. */
+.masthead__signout {
+  font: inherit;
+  font-size: 13px;
+  color: var(--color-mute);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  padding: 0 0 2px;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+
+.masthead__signout:hover {
+  color: var(--color-ink);
+}
+
+/* On a phone the reference links drop and the two things a person can actually
+   do stay. */
+@media (max-width: 760px) {
+  .wordmark i,
+  .masthead nav a[data-secondary='true'] {
+    display: none;
+  }
+
+  .masthead nav {
+    gap: 18px;
+  }
+}
+
+/* ------------------------------------------------------------------ colophon */
+
+.colophon {
+  border-top: 1px solid var(--color-hairline);
+  padding-block: 28px 40px;
+  margin-top: auto;
+}
+
+.colophon__inner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 32px;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.colophon p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-ash);
+}
+
+.colophon nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+}
+
+.colophon nav a {
+  font-size: 12px;
+  color: var(--color-mute);
+  text-decoration: none;
+}
+
+.colophon nav a:hover {
+  color: var(--color-ink);
+}
+
+/* ------------------------------------------------------------- page headings */
+
+/* Every page below the landing page opens the same way: an overline, a title,
+   and one line of standfirst. */
+.page-head {
+  padding-block: clamp(28px, 5vw, 48px) 0;
+}
+
+.page-head h1 {
+  margin: 12px 0 0;
+  font-size: clamp(26px, 3.6vw, 34px);
+  line-height: 1.1;
+  letter-spacing: -0.026em;
+  font-weight: 700;
+  color: var(--color-ink);
+  max-width: 20ch;
+  text-wrap: balance;
+}
+
+.page-head p {
+  margin: 14px 0 0;
+  max-width: 58ch;
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--color-mute);
+}
+
+.page-head--ruled {
+  border-bottom: 1px solid var(--color-hairline);
+  padding-bottom: clamp(24px, 4vw, 36px);
+}
+
+/* ------------------------------------------------------------------- motion */
+
+@media (prefers-reduced-motion: reduce) {
+  .masthead,
+  .cta > span {
+    transition-duration: 1ms;
+  }
+}

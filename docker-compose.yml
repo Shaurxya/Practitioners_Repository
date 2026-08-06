@@ -22,16 +22,20 @@ services:
       # The official Postgres image reads these on FIRST START ONLY, when it
       # initialises an empty data directory. Changing them later does nothing
       # until you `docker compose down -v` and let it initialise again.
-      POSTGRES_DB: verification
-      POSTGRES_USER: verification
-      POSTGRES_PASSWORD: verification
+      #
+      # Values come from the repo root .env, which Compose loads automatically
+      # because this file sits next to it. The :-defaults keep `docker compose
+      # up` working on a checkout where .env has not been created yet.
+      POSTGRES_DB: ${POSTGRES_DB:-verification}
+      POSTGRES_USER: ${POSTGRES_USER:-verification}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-verification}
 
     ports:
       # host:container. 5433 on the host on purpose: if you already have
       # Postgres installed on Windows it owns 5432, and "localhost:5432" would
       # silently resolve to that one instead of this container.
       # Inside the container it is still the normal 5432.
-      - "5433:5432"
+      - "${POSTGRES_PORT:-5433}:5432"
 
     volumes:
       # Named volume, managed by Docker. Survives `down`, removed by `down -v`.
@@ -44,11 +48,35 @@ services:
       # moments, several seconds apart. pg_isready tests the second one, which
       # is the one that matters. `docker compose ps` shows (healthy) only once
       # this passes.
-      test: ["CMD-SHELL", "pg_isready -U verification -d verification"]
+      # $$ escapes Compose's own interpolation, so the shell inside the
+      # container expands these from the environment block above rather than
+      # Compose substituting them here. Otherwise changing the user in .env
+      # leaves the healthcheck probing a role that no longer exists.
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s      # how often to run the check
       timeout: 5s       # how long one check may take before counting as failed
       retries: 10       # consecutive failures before the container is unhealthy
       start_period: 10s # grace window at boot where failures do not count
+
+  # ---------------------------------------------------------------------------
+  # PDF extraction sidecar
+  #
+  # Bound to loopback on purpose. This service takes a file path and returns
+  # registry rows, it has no authentication of its own, and it must never be
+  # reachable from anywhere except Spring. That is layer 1 of the access control
+  # described in RequireAdmin.
+  # ---------------------------------------------------------------------------
+  extraction:
+    build: ./extraction
+    container_name: verification-extraction
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${EXTRACTION_PORT:-8000}:8000"
+    volumes:
+      # Read only. The sidecar reads uploaded registers and writes nothing.
+      - ./data/uploads:/srv/uploads:ro
+    environment:
+      LOG_LEVEL: ${EXTRACTION_LOG_LEVEL:-INFO}
 
 volumes:
   postgres-data:

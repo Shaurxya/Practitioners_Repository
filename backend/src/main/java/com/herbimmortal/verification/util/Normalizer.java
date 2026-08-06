@@ -2,6 +2,8 @@ package com.herbimmortal.verification.util;
 
 import java.text.Normalizer.Form;
 import java.util.List;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -267,5 +269,61 @@ public final class Normalizer {
     private static String stripAccents(String raw) {
         String decomposed = java.text.Normalizer.normalize(raw, Form.NFKD);
         return COMBINING_MARKS.matcher(decomposed).replaceAll("");
+    }
+
+    // ------------------------------------------------------------------
+    // Name similarity, for NAME_MATCH
+    // ------------------------------------------------------------------
+
+    /**
+     * Token set similarity first, edit distance second, and the better of the
+     * two.
+     *
+     * Registers reorder names constantly. "PRABHUDESSAI VINAYAK" against
+     * "VINAYAK PRABHUDESSAI" is the same person and scores 0.36 on raw edit
+     * distance, which would reject the claim outright. Token comparison catches
+     * that; edit distance catches the single mistyped character that token
+     * comparison scores as a total miss.
+     */
+    public static double similarity(String a, String b) {
+        if (a == null || b == null || a.isEmpty() || b.isEmpty()) {
+            return 0.0;
+        }
+        if (a.equals(b)) {
+            return 1.0;
+        }
+
+        Set<String> tokensA = new HashSet<>(Arrays.asList(a.split(" ")));
+        Set<String> tokensB = new HashSet<>(Arrays.asList(b.split(" ")));
+        tokensA.remove("");
+        tokensB.remove("");
+
+        Set<String> union = new HashSet<>(tokensA);
+        union.addAll(tokensB);
+        Set<String> shared = new HashSet<>(tokensA);
+        shared.retainAll(tokensB);
+        double tokenScore = union.isEmpty() ? 0.0 : (double) shared.size() / union.size();
+
+        int longest = Math.max(a.length(), b.length());
+        double editScore = longest == 0 ? 0.0 : 1.0 - ((double) levenshtein(a, b) / longest);
+
+        return Math.max(tokenScore, editScore);
+    }
+
+    private static int levenshtein(String a, String b) {
+        int[] previous = new int[b.length() + 1];
+        for (int j = 0; j <= b.length(); j++) {
+            previous[j] = j;
+        }
+        for (int i = 1; i <= a.length(); i++) {
+            int[] current = new int[b.length() + 1];
+            current[0] = i;
+            for (int j = 1; j <= b.length(); j++) {
+                int cost = a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1;
+                current[j] = Math.min(Math.min(previous[j] + 1, current[j - 1] + 1), previous[j - 1] + cost);
+            }
+            previous = current;
+        }
+        return previous[b.length()];
     }
 }

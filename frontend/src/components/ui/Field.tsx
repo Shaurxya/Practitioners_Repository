@@ -2,11 +2,17 @@ import type { InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from 'rea
 import { useId } from 'react'
 import { cn } from '@/lib/cn'
 
+/*
+  One control surface: square, hairline, paper. Focus is a second inset rule in
+  ink rather than a coloured glow, so a focused field looks like a field that
+  has been marked rather than one that has changed state.
+*/
 const CONTROL = cn(
-  'w-full rounded-[--radius-control] border bg-surface px-3 text-content',
-  'placeholder:text-content-subtle outline-none transition-colors',
-  'focus-visible:ring-2 focus-visible:ring-focus focus-visible:border-focus',
-  'disabled:cursor-not-allowed disabled:opacity-60',
+  'w-full rounded-none border bg-canvas px-3 text-body-md text-ink',
+  'placeholder:text-ash outline-none transition-colors',
+  'focus:border-ink focus:outline-none focus-visible:outline-none',
+  'focus:shadow-[inset_0_-2px_0_0_var(--color-ink)]',
+  'disabled:cursor-not-allowed disabled:bg-surface-raised disabled:text-mute',
 )
 
 interface FieldShellProps {
@@ -28,17 +34,17 @@ function FieldShell({ label, hint, error, required, children }: FieldShellProps)
   const describedBy = [hint ? hintId : null, error ? errorId : null].filter(Boolean).join(' ')
 
   return (
-    <div className="space-y-1.5">
-      <label htmlFor={controlId} className="block text-sm font-medium text-content">
+    <div className="space-y-2">
+      <label htmlFor={controlId} className="mono-label block">
         {label}
         {required && (
-          <span className="ml-1 text-content-muted" aria-hidden="true">
+          <span className="ml-1 text-ash" aria-hidden="true">
             *
           </span>
         )}
       </label>
       {hint && (
-        <p id={hintId} className="text-sm text-content-muted">
+        <p id={hintId} className="text-body-sm text-content-muted">
           {hint}
         </p>
       )}
@@ -46,7 +52,7 @@ function FieldShell({ label, hint, error, required, children }: FieldShellProps)
       {/* role=alert so a screen reader announces the error when it appears,
           rather than only on the next focus move. */}
       {error && (
-        <p id={errorId} role="alert" className="text-sm text-rejected">
+        <p id={errorId} role="alert" className="text-body-sm text-rejected">
           {error}
         </p>
       )}
@@ -74,7 +80,7 @@ export function TextField({ label, hint, error, mono, className, ...rest }: Text
             CONTROL,
             'h-11',
             mono && 'font-mono tabular-nums tracking-tight',
-            error ? 'border-rejected' : 'border-border-strong',
+            error ? 'border-error' : 'border-hairline-strong',
             className,
           )}
           {...rest}
@@ -101,7 +107,7 @@ export function TextAreaField({ label, hint, error, className, ...rest }: TextAr
           className={cn(
             CONTROL,
             'min-h-20 py-2 leading-relaxed',
-            error ? 'border-rejected' : 'border-border-strong',
+            error ? 'border-error' : 'border-hairline-strong',
             className,
           )}
           {...rest}
@@ -142,7 +148,7 @@ export function SelectField({
           aria-describedby={describedBy}
           aria-invalid={error ? true : undefined}
           onChange={(event) => onChange(event.target.value)}
-          className={cn(CONTROL, 'h-11', error ? 'border-rejected' : 'border-border-strong')}
+          className={cn(CONTROL, 'h-11', error ? 'border-error' : 'border-hairline-strong')}
         >
           {placeholder && <option value="">{placeholder}</option>}
           {options.map((option) => (

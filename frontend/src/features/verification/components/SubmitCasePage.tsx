@@ -7,7 +7,7 @@ import { SelectField, TextField } from '@/components/ui/Field'
 import { ErrorState } from '@/components/ui/States'
 import { ApiRequestError } from '@/lib/apiClient'
 import { submitCase } from '../api/verificationApi'
-import { COUNCILS, SPECIALTIES, looksLikeRegistrationNumber } from '../councils'
+import { SPECIALTIES, councilOptions, looksLikeRegistrationNumber, useCouncils } from '../councils'
 import type { ClaimAlreadyOpen, SubmitVerificationRequest } from '../types'
 
 type Errors = Partial<Record<keyof SubmitVerificationRequest, string>>
@@ -52,6 +52,7 @@ const EMPTY: SubmitVerificationRequest = {
 export function SubmitCasePage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const councils = useCouncils()
   const [values, setValues] = useState<SubmitVerificationRequest>(EMPTY)
   const [errors, setErrors] = useState<Errors>({})
   const [alreadyOpen, setAlreadyOpen] = useState<ClaimAlreadyOpen | null>(null)
@@ -89,22 +90,23 @@ export function SubmitCasePage() {
   const failedForOtherReason = mutation.isError && !conflict
 
   return (
-    <div className="space-y-8">
-      <header className="space-y-2">
-        <h1 className="text-xl font-semibold text-content">Verify your registration</h1>
-        <p className="text-base text-content-muted">
+    <div className="doc space-y-8 pb-4">
+      <header className="page-head page-head--ruled">
+        <p className="mono-label">
+          <span className="mark" aria-hidden="true" />
+          Claim
+        </p>
+        <h1>Verify your registration</h1>
+        <p>
           Enter your details exactly as they appear on the official register. We check them against
-          your council's records.
+          your council's records, not against your certificate.
         </p>
       </header>
 
       {alreadyOpen && (
-        <div
-          role="status"
-          className="rounded-[--radius-panel] border border-border bg-surface-raised p-4"
-        >
-          <p className="text-base font-medium text-content">You already have a claim in progress</p>
-          <p className="mt-1 text-sm text-content-muted">
+        <div role="status" className="border border-border border-l-2 border-l-ink bg-surface-raised p-4">
+          <p className="text-body-md font-medium text-content">You already have a claim in progress</p>
+          <p className="mt-1 text-body-sm text-content-muted">
             You can only have one claim open at a time.
           </p>
           <Button
@@ -127,7 +129,7 @@ export function SubmitCasePage() {
         />
       )}
 
-      <form onSubmit={handleSubmit} noValidate className="space-y-6">
+      <form onSubmit={handleSubmit} noValidate className="space-y-7">
         <TextField
           label="Full name"
           hint="As printed on your registration certificate, including any initials."
@@ -140,7 +142,7 @@ export function SubmitCasePage() {
 
         <TextField
           label="Registration number"
-          hint="For example MH-12345. Dashes and spaces do not matter."
+          hint="Copy it exactly as your council prints it, for example MH-12345 or NR/AY/GA/0000001. Dashes, slashes and spaces do not matter."
           required
           mono
           autoCapitalize="characters"
@@ -152,8 +154,14 @@ export function SubmitCasePage() {
         <SelectField
           label="Council"
           required
-          placeholder="Select your council"
-          options={COUNCILS}
+          placeholder={
+            councils.isPending
+              ? 'Loading councils'
+              : councils.isError
+                ? 'Could not load councils, reload the page'
+                : 'Select your council'
+          }
+          options={councilOptions(councils.data)}
           value={values.council}
           error={errors.council}
           onChange={(value) => set('council', value)}
@@ -171,7 +179,7 @@ export function SubmitCasePage() {
 
         {/* Expectation setting sits next to the button, not in a toast after.
             A claim that goes silent is the main reason people email support. */}
-        <div className="rounded-[--radius-panel] bg-surface-raised px-4 py-3 text-sm text-content-muted">
+        <div className="border-l-2 border-border-strong bg-surface-raised px-4 py-3 text-body-sm text-content-muted">
           Most claims are checked within a minute. If we need a person to look at yours, that
           usually takes one working day. You can close this page and come back to it.
         </div>

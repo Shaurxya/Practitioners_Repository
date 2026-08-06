@@ -1,7 +1,26 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import { cn } from '@/lib/cn'
 
-type Variant = 'primary' | 'secondary' | 'danger' | 'ghost'
+/**
+ * Five variants, and they map to intent rather than to colour: do the thing,
+ * do a lesser thing, do a quiet thing, destroy something, or read as text.
+ *
+ * There is no brand colour here. Primary is ink on paper, the only filled
+ * surface in the system, so the eye finds it without a hue. Status colour
+ * belongs to StatusBadge and nowhere else.
+ *
+ * outline, outline-on-dark and ghost-link are kept as aliases so older call
+ * sites keep compiling; they resolve onto secondary and link.
+ */
+type Variant =
+  | 'primary'
+  | 'secondary'
+  | 'ghost'
+  | 'danger'
+  | 'link'
+  | 'outline'
+  | 'outline-on-dark'
+  | 'ghost-link'
 type Size = 'sm' | 'md' | 'lg'
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -13,21 +32,28 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-accent text-accent-content hover:bg-accent-hover',
-  secondary: 'bg-surface text-content border border-border-strong hover:bg-surface-raised',
-  danger: 'bg-danger text-danger-content hover:bg-danger-hover',
-  ghost: 'bg-transparent text-content-muted hover:bg-surface-raised hover:text-content',
+  primary:
+    'border border-ink bg-ink text-accent-content hover:bg-accent-hover hover:border-accent-hover',
+  secondary: 'border border-border-strong bg-canvas text-content hover:border-ink',
+  ghost:
+    'border border-transparent bg-transparent text-content-muted hover:bg-surface-raised hover:text-content',
+  danger: 'border border-danger bg-canvas text-danger hover:bg-rejected-soft',
+  /* Reads as a sentence, not a control. For tertiary actions in dense views. */
+  link: 'border-0 bg-transparent text-content underline decoration-border-strong underline-offset-4 hover:decoration-current',
+  outline: 'border border-border-strong bg-canvas text-content hover:border-ink',
+  'outline-on-dark': 'border border-on-dark bg-transparent text-on-dark hover:bg-surface-elevated',
+  'ghost-link':
+    'border-0 bg-transparent text-content underline decoration-border-strong underline-offset-4 hover:decoration-current',
 }
 
-/** lg exists for the portal, where a touch target under 44px is a real problem. */
 const SIZES: Record<Size, string> = {
-  sm: 'h-7 px-2.5 text-xs gap-1.5',
-  md: 'h-9 px-3.5 text-sm gap-2',
-  lg: 'h-11 px-5 text-base gap-2',
+  sm: 'h-8 px-3 text-button-sm gap-2',
+  md: 'h-10 px-4 text-button-md gap-2',
+  lg: 'h-11 px-5 text-button-lg gap-2',
 }
 
 export function Button({
-  variant = 'secondary',
+  variant = 'primary',
   size = 'md',
   loading = false,
   disabled,
@@ -35,6 +61,8 @@ export function Button({
   children,
   ...rest
 }: ButtonProps) {
+  const isTextual = variant === 'link' || variant === 'ghost-link'
+
   return (
     <button
       // type defaults to "submit" inside a form, which fires unwanted submits
@@ -44,12 +72,11 @@ export function Button({
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={cn(
-        'inline-flex items-center justify-center rounded-[--radius-control] font-medium',
+        'inline-flex items-center justify-center rounded-none font-medium',
         'transition-colors outline-none',
-        'focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-1 focus-visible:ring-offset-canvas',
-        'disabled:cursor-not-allowed disabled:opacity-50',
+        'disabled:cursor-not-allowed disabled:border-border disabled:bg-transparent disabled:text-ash',
         VARIANTS[variant],
-        SIZES[size],
+        isTextual ? 'h-auto gap-2 p-0 text-body-sm' : SIZES[size],
         className,
       )}
       {...rest}
@@ -57,10 +84,11 @@ export function Button({
       {loading && (
         <span
           aria-hidden="true"
-          className="size-3 animate-spin rounded-full border-2 border-current border-t-transparent"
+          className="mr-1 size-3 animate-spin rounded-full border border-current border-t-transparent"
         />
       )}
       {children}
+      {isTextual && !loading && <span aria-hidden="true">→</span>}
     </button>
   )
 }

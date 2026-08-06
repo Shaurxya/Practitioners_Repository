@@ -2,6 +2,10 @@ import { HttpResponse, http } from 'msw'
 import type { ReviewCaseDetail } from '@/features/admin-review/types'
 import type { PractitionerCaseDetail } from '@/features/verification/types'
 import { PRACTITIONER_CASES, REVIEW_CASES, VERIFIED_IMMORTAL_ID, toQueueItem } from './fixtures'
+import type { CaseStatus } from '@/types/caseStatus'
+import { COUNCILS, councilName } from './councils'
+import { importHandlers, resetImportMockData } from './importHandlers'
+import { decide, evaluate, issueImmortalId, licenceKeys, matchClaim, normalizeName } from './verificationEngine'
 
 /**
  * Mock API matching the designed contract.
@@ -15,13 +19,124 @@ import { PRACTITIONER_CASES, REVIEW_CASES, VERIFIED_IMMORTAL_ID, toQueueItem } f
  * enabled by default: main.tsx starts it only when VITE_USE_MOCKS is "true".
  */
 
-/** Mutable per session so a decision sticks while you click around. */
-let reviewCases: ReviewCaseDetail[] = structuredClone(REVIEW_CASES)
-let practitionerCases: PractitionerCaseDetail[] = structuredClone(PRACTITIONER_CASES)
+/**
+ * The app starts EMPTY. Everything on screen got there because someone put it
+ * there in this session: a claim submitted on the public site, a register
+ * uploaded in the console.
+ *
+ * Demo rows are useful in exactly one place, a test that needs a known
+ * starting point, and harmful everywhere else. A console that opens with three
+ * invented practitioners waiting for review teaches the wrong thing about what
+ * the product does, and worse, it makes an empty state that never gets
+ * designed, because nobody ever sees it.
+ *
+ * Tests opt in with resetMockData(true). See src/test/setup.ts.
+ */
+let reviewCases: ReviewCaseDetail[] = []
+let practitionerCases: PractitionerCaseDetail[] = []
 
-export function resetMockData() {
-  reviewCases = structuredClone(REVIEW_CASES)
-  practitionerCases = structuredClone(PRACTITIONER_CASES)
+/**
+ * Immortal IDs already issued, keyed on the registration number.
+ *
+ * Section 8.1: issued exactly once, on the FIRST approval, permanent and
+ * immutable. Re-approval after an expiry or a revocation returns the same ID,
+ * so it cannot live on the case, which is one attempt and terminal.
+ */
+let issuedImmortalIds: Record<string, string> = {}
+
+/**
+ * Mock accounts. Passwords live in PASSWORDS below, never on these objects.
+ *
+ *   admin@herbimmortal.com    ADMIN         admin@password
+ *   admin@herbimmortal.test   ADMIN         devpassword
+ *   anita@example.com         PRACTITIONER  devpassword
+ *
+ * These are development credentials in a git tracked file, which is only
+ * acceptable because this module is a mock that deletes when Spring Security
+ * lands. Phase 8 stores an argon2 or bcrypt hash in configuration and this file
+ * goes with the rest of mocks/. Nothing here should ever be copied forward.
+ *
+ * Nobody is signed in at boot. /api/v1/me answers 401 without a valid bearer
+ * token, which is what makes RequireAdmin mean anything: it used to guard the
+ * console against a /me that unconditionally returned the admin, so the guard
+ * passed for everyone and the console was effectively public.
+ */
+const ACCOUNTS = {
+  'admin@herbimmortal.com': {
+    id: 'a41c0000-0000-4000-8000-0000000000a0',
+    email: 'admin@herbimmortal.com',
+    fullName: 'Shaurya Sharma',
+    role: 'ADMIN' as const,
+    immortalId: null,
+  },
+  'admin@herbimmortal.test': {
+    id: 'a41c0000-0000-4000-8000-0000000000ad',
+    email: 'admin@herbimmortal.test',
+    fullName: 'Shaurya Sharma',
+    role: 'ADMIN' as const,
+    immortalId: null,
+  },
+  'anita@example.com': {
+    id: 'a41c0000-0000-4000-8000-000000000001',
+    email: 'anita@example.com',
+    fullName: 'Anita Sharma',
+    role: 'PRACTITIONER' as const,
+    immortalId: VERIFIED_IMMORTAL_ID,
+  },
+}
+
+/**
+ * Kept out of the account objects on purpose.
+ *
+ * ACCOUNTS is what /api/v1/me serializes straight back to the browser. A
+ * password field on those objects would be published to the client on every
+ * page load, which is the classic way this leaks: not through a mistake at the
+ * call site, but because the secret was sitting inside a record that something
+ * else was already designed to return whole.
+ *
+ * Per account rather than one shared string, so changing one credential cannot
+ * silently change the others.
+ */
+const PASSWORDS: Record<keyof typeof ACCOUNTS, string> = {
+  'admin@herbimmortal.com': 'admin@password',
+  'admin@herbimmortal.test': 'devpassword',
+  'anita@example.com': 'devpassword',
+}
+
+type AccountEmail = keyof typeof ACCOUNTS
+
+/**
+ * The token carries the account, so /me can answer without a session table.
+ * A real JWT carries the subject the same way; this is the same idea with the
+ * signature left out, which is fine precisely because it is a mock and must
+ * never be mistaken for one.
+ */
+const TOKEN_PREFIX = 'mock.access.'
+
+function accountFromRequest(request: Request) {
+  const header = request.headers.get('Authorization') ?? ''
+  if (!header.startsWith('Bearer ')) return null
+  const token = header.slice('Bearer '.length)
+  if (!token.startsWith(TOKEN_PREFIX)) return null
+  const email = token.slice(TOKEN_PREFIX.length) as AccountEmail
+  return ACCOUNTS[email] ?? null
+}
+
+const unauthorized = () =>
+  HttpResponse.json(
+    { code: 'UNAUTHENTICATED', message: 'Sign in to continue', timestamp: new Date().toISOString() },
+    { status: 401 },
+  )
+
+/**
+ * Seeded only when a test asks for it. The running app starts empty so the
+ * console shows what this admin actually did, never a demo dataset.
+ */
+export function resetMockData(seeded = false) {
+  reviewCases = seeded ? structuredClone(REVIEW_CASES) : []
+  practitionerCases = seeded ? structuredClone(PRACTITIONER_CASES) : []
+  issuedImmortalIds = {}
+  resetImportMockData(seeded)
 }
 
 const OPEN_STATUSES = new Set(['SUBMITTED', 'MATCHING', 'RULES_EVAL', 'NO_MATCH', 'MANUAL_REVIEW'])
@@ -106,6 +221,46 @@ export const handlers = [
       decisionReason: body.reason,
     }
 
+    /**
+     * The same decision, applied to the case the practitioner is watching.
+     *
+     * These are two views of one case, and before this the decision moved only
+     * the reviewer's copy: an admin approved, the case left the queue, and the
+     * practitioner's page sat on "Reviewed by our team, in progress" forever
+     * with no Immortal ID. The approval had no effect on the only person it was
+     * about.
+     */
+    const owner = practitionerCases.findIndex((c) => c.caseId === found.caseId)
+    if (owner >= 0) {
+      const current = practitionerCases[owner] as PractitionerCaseDetail
+      const approved = status === 'APPROVED'
+
+      // Section 8.1: issued on the FIRST approval, and never reissued. Keyed on
+      // the registration number rather than the case, so a later expiry and
+      // re-approval returns the same identifier.
+      if (approved && !issuedImmortalIds[current.claim.registrationNumber]) {
+        issuedImmortalIds[current.claim.registrationNumber] = issueImmortalId()
+      }
+
+      practitionerCases[owner] = {
+        ...current,
+        status,
+        outcomeCode: approved ? 'VERIFIED' : 'COULD_NOT_VERIFY',
+        decidedAt,
+        immortalId: approved
+          ? (issuedImmortalIds[current.claim.registrationNumber] as string)
+          : null,
+        verifiedAsOf: approved ? decidedAt.slice(0, 10) : null,
+        registrySourceBatch: approved ? (current.registrySourceBatch ?? 'manual-review') : null,
+        progress: [
+          { step: 'SUBMITTED', state: 'DONE' },
+          { step: 'CHECKING', state: 'DONE' },
+          { step: 'REVIEW', state: 'DONE' },
+          { step: 'DECISION', state: approved ? 'DONE' : 'ERROR' },
+        ],
+      }
+    }
+
     const next = reviewCases.find((c) => OPEN_STATUSES.has(c.status) && c.caseId !== found.caseId)
     return HttpResponse.json({
       caseId: found.caseId,
@@ -154,36 +309,158 @@ export const handlers = [
       )
     }
 
+    /**
+     * Normalize, match, run the catalog, decide. Synchronously, because the
+     * whole pipeline is an indexed lookup plus six comparisons over rows
+     * already in memory: there is nothing here worth making a person wait for.
+     *
+     * The real thing is asynchronous from intake onward (non negotiable 7), and
+     * this stands in for the queue landing almost immediately. What it must not
+     * do is what it did before, which was leave the case in SUBMITTED forever so
+     * the portal showed "Checking your details" with nothing behind it.
+     */
+    const candidates = matchClaim(claim)
+    const ruleResults = evaluate(candidates)
+    const decision = decide(candidates, ruleResults)
+    const now = new Date().toISOString()
+
+    const approved = decision === 'APPROVED'
+    const status: CaseStatus =
+      decision === 'APPROVED'
+        ? 'APPROVED'
+        : decision === 'REJECTED'
+          ? 'REJECTED'
+          : decision === 'NO_MATCH'
+            ? 'NO_MATCH'
+            : 'MANUAL_REVIEW'
+
+    /**
+     * Issued once, on the first approval, and never reissued. Held on the
+     * account rather than the case, so it survives a later expiry or revocation
+     * exactly as section 8.1 requires.
+     */
+    if (approved && !issuedImmortalIds[claim.registrationNumber]) {
+      issuedImmortalIds[claim.registrationNumber] = issueImmortalId()
+    }
+    const immortalId = approved ? (issuedImmortalIds[claim.registrationNumber] as string) : null
+    const matched = candidates[0]?.row ?? null
+
     const created: PractitionerCaseDetail = {
       caseId: crypto.randomUUID(),
-      status: 'SUBMITTED',
-      outcomeCode: 'IN_PROGRESS',
-      submittedAt: new Date().toISOString(),
-      decidedAt: null,
+      status,
+      outcomeCode: approved
+        ? 'VERIFIED'
+        : decision === 'REJECTED'
+          ? 'COULD_NOT_VERIFY'
+          : 'IN_REVIEW',
+      submittedAt: now,
+      decidedAt: decision === 'MANUAL_REVIEW' || decision === 'NO_MATCH' ? null : now,
       claim,
       progress: [
         { step: 'SUBMITTED', state: 'DONE' },
-        { step: 'CHECKING', state: 'ACTIVE' },
-        { step: 'REVIEW', state: 'PENDING' },
-        { step: 'DECISION', state: 'PENDING' },
+        { step: 'CHECKING', state: 'DONE' },
+        {
+          step: 'REVIEW',
+          state: decision === 'MANUAL_REVIEW' || decision === 'NO_MATCH' ? 'ACTIVE' : 'SKIPPED',
+        },
+        {
+          step: 'DECISION',
+          state: decision === 'MANUAL_REVIEW' || decision === 'NO_MATCH' ? 'PENDING' : 'DONE',
+        },
       ],
-      verifiedAsOf: null,
-      registrySourceBatch: null,
-      immortalId: null,
+      verifiedAsOf: approved ? now.slice(0, 10) : null,
+      registrySourceBatch: approved ? (matched?.sourceBatch ?? null) : null,
+      immortalId,
     }
     practitionerCases = [created, ...practitionerCases]
-    // 202: queued, not decided. The outcome arrives through polling.
+
+    /**
+     * The console only sees what a person actually has to decide.
+     *
+     * An approved or rejected case is finished, and putting it in the review
+     * queue would make the queue a log rather than a worklist. Everything is
+     * still reachable through /admin/cases, which exists precisely so a
+     * reviewer can look up a case that is not in the queue.
+     */
+    if (decision === 'MANUAL_REVIEW' || decision === 'NO_MATCH') {
+      reviewCases = [
+        {
+          caseId: created.caseId,
+          status,
+          submittedAt: now,
+          decidedAt: null,
+          decidedBy: null,
+          decisionReason: null,
+          claim: {
+            ...claim,
+            normalizedName: normalizeName(claim.fullName),
+            normalizedRegistrationNumber: licenceKeys(claim.registrationNumber, claim.council)[0] ?? '',
+          },
+          candidates: candidates.map((c) => ({
+            registryRecordId: `${c.row.councilCode}-${c.row.licenceRaw}`,
+            registrationNumber: c.row.licenceRaw,
+            fullName: c.row.fullNameRaw,
+            council: c.row.councilCode,
+            specialty: c.row.specialty ?? '',
+            status: c.row.status,
+            validUntil: c.row.validUntil ?? '',
+            nameScore: c.nameScore,
+            matchedOn: c.matchedOn,
+            sourceBatch: c.row.sourceBatch,
+          })),
+          ruleResults,
+          audit: [
+            { at: now, eventType: 'STATUS_CHANGE', actor: 'practitioner', fromStatus: null, toStatus: 'SUBMITTED', reason: null },
+            { at: now, eventType: 'STATUS_CHANGE', actor: 'system', fromStatus: 'SUBMITTED', toStatus: 'MATCHING', reason: null },
+            candidates.length === 0
+              ? { at: now, eventType: 'STATUS_CHANGE', actor: 'system', fromStatus: 'MATCHING', toStatus: 'NO_MATCH', reason: '0 candidates' }
+              : { at: now, eventType: 'STATUS_CHANGE', actor: 'system', fromStatus: 'MATCHING', toStatus: 'RULES_EVAL', reason: `${candidates.length} candidate${candidates.length === 1 ? '' : 's'}` },
+            {
+              at: now,
+              eventType: 'STATUS_CHANGE',
+              actor: 'system',
+              fromStatus: candidates.length === 0 ? 'NO_MATCH' : 'RULES_EVAL',
+              toStatus: 'MANUAL_REVIEW',
+              reason:
+                candidates.length === 0
+                  ? 'zero candidates always routes to a person'
+                  : ruleResults
+                      .filter((r) => r.outcome === 'REVIEW' || r.outcome === 'FAIL')
+                      .map((r) => `${r.ruleCode} ${r.outcome}`)
+                      .join(', '),
+            },
+          ],
+        } as ReviewCaseDetail,
+        ...reviewCases,
+      ]
+    }
+
+    // 202: accepted. The decision is already made here because the pipeline is
+    // an in memory lookup, but the contract stays 202 so the portal keeps
+    // polling and the real asynchronous version needs no client change.
     return HttpResponse.json(created, { status: 202 })
   }),
 
   // ---- public ------------------------------------------------------------
   http.get('/api/v1/public/verify', ({ request }) => {
-    const id = new URL(request.url).searchParams.get('immortalId')
-    // An unknown ID and an unverified one are the same response, so this
-    // endpoint cannot be used to discover which IDs exist.
-    if (id !== VERIFIED_IMMORTAL_ID) {
+    const id = new URL(request.url).searchParams.get('immortalId') ?? ''
+
+    /**
+     * Answers from the cases this system actually approved, rather than one
+     * hardcoded ID. An unknown ID and an unverified one produce the same body,
+     * so this endpoint cannot be used to discover which IDs exist.
+     *
+     * Read live from the current case, never from a stored flag: non negotiable
+     * 3 is that a revoked practitioner stops reading as verified everywhere the
+     * moment the case flips.
+     */
+    const approved = practitionerCases.find(
+      (c) => c.immortalId === id && c.status === 'APPROVED',
+    )
+
+    if (!approved) {
       return HttpResponse.json({
-        immortalId: id ?? '',
+        immortalId: id,
         displayName: '',
         status: 'NOT_VERIFIED',
         verifiedAsOf: '',
@@ -191,40 +468,61 @@ export const handlers = [
         council: '',
       })
     }
+
+    // Initial plus surname, which is all a verification answer needs to show.
+    const parts = approved.claim.fullName.trim().split(/\s+/)
+    const displayName =
+      parts.length > 1
+        ? `${parts[0]?.[0]}. ${parts[parts.length - 1]}`
+        : (parts[0] ?? '')
+
     return HttpResponse.json({
-      immortalId: VERIFIED_IMMORTAL_ID,
-      displayName: 'A. Sharma',
+      immortalId: id,
+      displayName,
       status: 'VERIFIED',
-      verifiedAsOf: '2026-07-14',
-      registrySourceBatch: 'council-2026-07-14',
-      council: 'Maharashtra Council of Indian Medicine',
+      verifiedAsOf: approved.verifiedAsOf ?? '',
+      registrySourceBatch: approved.registrySourceBatch ?? '',
+      council: councilName(approved.claim.council),
     })
   }),
 
   // ---- auth --------------------------------------------------------------
   http.post('/api/v1/auth/login', async ({ request }) => {
     const body = (await request.json()) as { email: string; password: string }
-    if (body.password !== 'devpassword') {
-      // Identical response whether or not the email exists.
+    const email = body.email.trim().toLowerCase() as AccountEmail
+    // Both halves checked together, and one response for either failing.
+    // Answering differently for an unknown email turns this endpoint into a way
+    // to find out who holds an account.
+    if (!(email in ACCOUNTS) || PASSWORDS[email] !== body.password) {
       return HttpResponse.json(
         { code: 'BAD_CREDENTIALS', message: 'Invalid credentials', timestamp: new Date().toISOString() },
         { status: 401 },
       )
     }
     return HttpResponse.json({
-      accessToken: 'mock.access.token',
-      refreshToken: 'mock.refresh.token',
+      accessToken: `${TOKEN_PREFIX}${email}`,
+      refreshToken: `mock.refresh.${email}`,
       expiresInSeconds: 900,
     })
   }),
 
-  http.get('/api/v1/me', () =>
-    HttpResponse.json({
-      id: 'a41c0000-0000-4000-8000-000000000001',
-      email: 'anita@example.com',
-      fullName: 'Anita Sharma',
-      role: 'PRACTITIONER',
-      immortalId: VERIFIED_IMMORTAL_ID,
-    }),
-  ),
+  http.get('/api/v1/me', ({ request }) => {
+    const account = accountFromRequest(request)
+    return account ? HttpResponse.json(account) : unauthorized()
+  }),
+
+  /**
+   * Public reference data, no auth. The claim form needs it before anyone has
+   * an account, and the list is not sensitive: it is the set of bodies whose
+   * registers we hold, which is exactly what the public verify page already
+   * prints.
+   *
+   * Served rather than shipped in the bundle for the reason V2 gives for making
+   * councils a table instead of a Java enum: adding one is a migration, not a
+   * redeploy. A hardcoded client copy defeats that, and did.
+   */
+  http.get('/api/v1/councils', () => HttpResponse.json(COUNCILS)),
+
+  // ---- registry import ---------------------------------------------------
+  ...importHandlers,
 ]

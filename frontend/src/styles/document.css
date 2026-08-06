@@ -1,0 +1,896 @@
+/*
+  Document primitives: the way this site sets a table, a note, a route listing,
+  a code block, a numbered argument and a stepped process.
+
+  Every page uses these, not just the overview. That is the point: the portal,
+  the console, the API reference and the landing page are one document with
+  different sections, so a table of rules and a table of API keys are set the
+  same way.
+
+  Values come from tokens.css through the short aliases declared in chrome.css.
+  Two faces only, Inter at 400 and 700 and the platform monospace stack. Labels,
+  keys, codes and numbers are monospace, everything read in sentences is Inter.
+  No display face, no icon set.
+*/
+
+/* The wrapper for any page set as a document rather than as an application
+   screen. Slightly looser than the app default, because these pages are read
+   rather than operated. */
+.doc {
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--ink-body);
+}
+
+/* ----------------------------------------------------------------------- hero */
+
+.doc-hero {
+  position: relative;
+  border-bottom: 1px solid var(--rule);
+  padding-block: clamp(56px, 11vw, 128px) clamp(40px, 7vw, 80px);
+  overflow: hidden;
+}
+
+/* Four hairlines behind the hero, the same rhythm as the layout grid. Structure
+   rather than decoration, which is why it stops at the hero. */
+.doc-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--rule) 0 1px,
+    transparent 1px 25%
+  );
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.doc-hero__inner {
+  position: relative;
+  display: grid;
+  gap: clamp(32px, 5vw, 64px);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 940px) {
+  .doc-hero__inner {
+    grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.85fr);
+    align-items: end;
+  }
+}
+
+.doc-hero h1 {
+  margin: 20px 0 0;
+  font-size: clamp(34px, 5.4vw, 62px);
+  line-height: 1.02;
+  letter-spacing: -0.033em;
+  font-weight: 700;
+  color: var(--ink);
+  text-wrap: balance;
+  max-width: 17ch;
+}
+
+.doc-hero h1 em {
+  font-style: normal;
+  color: var(--ink-faint);
+}
+
+.doc-lede {
+  margin: 26px 0 0;
+  max-width: 54ch;
+  font-size: clamp(16px, 1.5vw, 18px);
+  line-height: 1.62;
+  color: var(--ink-body);
+}
+
+.doc-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px;
+  margin-top: 36px;
+}
+
+/* Spec block: the page states its own parameters before it argues anything. */
+.doc-spec {
+  border-top: 2px solid var(--ink);
+  padding-top: 14px;
+}
+
+.doc-spec dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: minmax(84px, auto) 1fr;
+}
+
+.doc-spec dt,
+.doc-spec dd {
+  margin: 0;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.doc-spec dt {
+  color: var(--ink-faint);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.doc-spec dd {
+  color: var(--ink);
+  text-align: right;
+  padding-left: 20px;
+}
+
+/* -------------------------------------------------------------------- contents */
+
+.doc-contents {
+  border-bottom: 1px solid var(--rule);
+  padding-block: 28px;
+}
+
+.doc-contents ol {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0 32px;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+}
+
+.doc-contents li {
+  border-top: 1px solid var(--rule);
+}
+
+.doc-contents a {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 0;
+  text-decoration: none;
+  color: var(--ink);
+  font-size: 14px;
+  transition: color 120ms ease;
+}
+
+.doc-contents a:hover {
+  color: var(--mark-text);
+}
+
+.doc-contents a b {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ink-faint);
+}
+
+/* -------------------------------------------------------------------- sections */
+
+.doc-section {
+  border-bottom: 1px solid var(--rule);
+  padding-block: clamp(48px, 7vw, 88px);
+  scroll-margin-top: 76px;
+}
+
+.doc-section:last-of-type {
+  border-bottom: 0;
+}
+
+.doc-section__grid {
+  display: grid;
+  gap: clamp(24px, 4vw, 56px);
+  /* minmax(0, 1fr) rather than 1fr: a wide table inside a 1fr track sizes the
+     track to its min-content and pushes the whole document sideways. */
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 940px) {
+  .doc-section__grid {
+    grid-template-columns: 168px minmax(0, 1fr);
+  }
+}
+
+/* The number and title stay put while their own section scrolls, so the reader
+   always knows which clause they are inside. Pure CSS, no scroll listener. */
+.doc-section__rail {
+  align-self: start;
+}
+
+@media (min-width: 940px) {
+  .doc-section__rail {
+    position: sticky;
+    top: 92px;
+  }
+}
+
+.doc-section__rail p {
+  margin: 0;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.doc-section__rail h2 {
+  margin: 10px 0 0;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+}
+
+/* One vertical rhythm for every block a section can contain. Declared as a
+   child selector rather than on each element so a new block type inherits the
+   spacing instead of needing its own rule. */
+.doc-body {
+  min-width: 0;
+}
+
+.doc-body > * {
+  margin: 0;
+}
+
+.doc-body > * + * {
+  margin-top: 24px;
+}
+
+/* A subhead opens a new argument, so it gets more air above it than a
+   paragraph does. Higher specificity, so it wins over the rule above. */
+.doc-body > h3 {
+  margin-top: 44px;
+}
+
+.doc-body > .doc-lead + p {
+  margin-top: 28px;
+}
+
+.doc-body p {
+  max-width: var(--measure);
+  line-height: 1.68;
+}
+
+.doc-body h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.005em;
+}
+
+.doc-body strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.doc-body code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.87em;
+  color: var(--ink);
+  background: var(--paper-sunk);
+  padding: 1px 5px;
+  border: 1px solid var(--rule);
+}
+
+.doc-lead {
+  font-size: clamp(17px, 1.6vw, 19px);
+  line-height: 1.55;
+  color: var(--ink);
+  letter-spacing: -0.011em;
+  max-width: 48ch;
+}
+
+/* ----------------------------------------------------------------- note blocks */
+
+.doc-notes {
+  display: grid;
+  gap: 1px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+}
+
+@media (min-width: 640px) {
+  .doc-notes--2 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.doc-note {
+  background: var(--paper);
+  padding: 20px;
+}
+
+.doc-note h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.doc-note p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-mute);
+}
+
+/* An aside that carries a caveat. Rule on the left, no tint, no icon. */
+.doc-aside {
+  border-left: 2px solid var(--mark);
+  padding: 2px 0 2px 18px;
+}
+
+.doc-aside p {
+  font-size: 14.5px;
+  color: var(--ink-mute);
+}
+
+/* ---------------------------------------------------------------------- tables */
+
+.doc-table-wrap {
+  overflow-x: auto;
+  border-top: 2px solid var(--ink);
+}
+
+.doc-table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.doc-table th {
+  text-align: left;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  padding: 12px 16px 12px 0;
+  border-bottom: 1px solid var(--rule-strong);
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.doc-table td {
+  padding: 14px 16px 14px 0;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  color: var(--ink-mute);
+  line-height: 1.5;
+}
+
+.doc-table td:first-child {
+  color: var(--ink);
+}
+
+.doc-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.doc-table .doc-code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.doc-table .doc-num {
+  color: var(--ink-faint);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  width: 1%;
+  white-space: nowrap;
+}
+
+.doc-yes {
+  color: var(--mark-text);
+  font-weight: 700;
+}
+
+.doc-nil {
+  color: var(--ink-faint);
+}
+
+/* ------------------------------------------------------------- id specimen */
+
+.doc-specimen {
+  border: 1px solid var(--rule);
+  background: var(--paper-sunk);
+  padding: clamp(24px, 4vw, 40px) clamp(16px, 3vw, 32px);
+  text-align: center;
+}
+
+.doc-specimen__id {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+.doc-glyphs {
+  display: flex;
+  gap: 4px;
+}
+
+.doc-glyph {
+  width: clamp(24px, 4.6vw, 38px);
+  height: clamp(34px, 6.4vw, 52px);
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--rule-strong);
+  background: var(--paper);
+  font-size: clamp(15px, 2.4vw, 22px);
+  color: var(--ink);
+}
+
+.doc-glyph--fixed {
+  border-style: dashed;
+  color: var(--ink-faint);
+}
+
+.doc-glyph--check {
+  border-color: var(--mark);
+  color: var(--mark-text);
+}
+
+.doc-specimen__sep {
+  font-size: clamp(15px, 2.4vw, 22px);
+  color: var(--ink-faint);
+  align-self: center;
+}
+
+.doc-specimen__legend {
+  display: grid;
+  gap: 10px 28px;
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule);
+  text-align: left;
+}
+
+@media (min-width: 720px) {
+  .doc-specimen__legend {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.doc-specimen__legend div {
+  font-size: 13px;
+  color: var(--ink-mute);
+  line-height: 1.5;
+}
+
+.doc-specimen__legend b {
+  display: block;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  font-weight: 400;
+  margin-bottom: 3px;
+}
+
+/* --------------------------------------------------------------- fact ledger */
+
+.doc-facts {
+  display: grid;
+  gap: 1px;
+  background: var(--rule);
+  border-block: 1px solid var(--rule);
+}
+
+@media (min-width: 620px) {
+  .doc-facts {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 940px) {
+  .doc-facts--3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.doc-fact {
+  background: var(--paper);
+  margin: 0;
+  padding: 18px 20px 18px 0;
+}
+
+.doc-fact dt {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.doc-fact dd {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: var(--ink-mute);
+  line-height: 1.55;
+}
+
+.doc-fact dd b {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* ------------------------------------------------------------------- pipeline */
+
+.doc-flow {
+  border-top: 2px solid var(--ink);
+  counter-reset: step;
+}
+
+.doc-step {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 16px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+@media (min-width: 720px) {
+  .doc-step {
+    grid-template-columns: 28px minmax(0, 230px) minmax(0, 1fr);
+    align-items: baseline;
+  }
+}
+
+.doc-step::before {
+  counter-increment: step;
+  content: counter(step, decimal-leading-zero);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.doc-step h4 {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* Explicit column, otherwise auto placement drops the paragraph into the 28px
+   number track on a phone, where it sets one word per line and pushes the whole
+   document into a sideways scroll. */
+.doc-step p {
+  grid-column: 2;
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--ink-mute);
+  line-height: 1.6;
+}
+
+@media (min-width: 720px) {
+  .doc-step p {
+    grid-column: 3;
+    margin-top: 0;
+  }
+}
+
+.doc-step--branch {
+  background: var(--paper-sunk);
+  padding-inline: 14px;
+  margin-inline: -14px;
+}
+
+/* --------------------------------------------------------------- transitions */
+
+.doc-states {
+  display: grid;
+  gap: 1px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+}
+
+@media (min-width: 720px) {
+  .doc-states {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.doc-states section {
+  background: var(--paper);
+  padding: 20px;
+}
+
+.doc-states h4 {
+  margin: 0 0 14px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  font-weight: 400;
+  color: var(--ink-faint);
+}
+
+.doc-states ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.doc-states li {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11.5px;
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  padding: 4px 8px;
+}
+
+.doc-states li[data-terminal='true'] {
+  border-style: dashed;
+  color: var(--ink-mute);
+}
+
+.doc-transitions {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  columns: 2;
+  column-gap: 32px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11.5px;
+  line-height: 2.05;
+  color: var(--ink-mute);
+}
+
+@media (max-width: 620px) {
+  .doc-transitions {
+    columns: 1;
+  }
+}
+
+.doc-transitions b {
+  color: var(--ink);
+  font-weight: 400;
+}
+
+/* -------------------------------------------------------------- numbered list */
+
+.doc-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 2px solid var(--ink);
+  counter-reset: tenet;
+}
+
+.doc-list li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--ink-mute);
+}
+
+.doc-list li::before {
+  counter-increment: tenet;
+  content: counter(tenet, decimal-leading-zero);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.doc-list b {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* ---------------------------------------------------------------- api listing */
+
+.doc-routes {
+  border-top: 2px solid var(--ink);
+}
+
+.doc-routes h4 {
+  margin: 0;
+  padding: 16px 0 8px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  font-weight: 400;
+  color: var(--ink-faint);
+}
+
+.doc-route {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--rule);
+  align-items: baseline;
+}
+
+@media (min-width: 780px) {
+  .doc-route {
+    grid-template-columns: 52px minmax(0, 355px) minmax(0, 1fr);
+  }
+}
+
+.doc-route i {
+  font-style: normal;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+}
+
+.doc-route code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12.5px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  /* Paths are already in a monospace column, so they do not also need the
+     inline code chip treatment they would inherit from .doc-body code. */
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+/* Same reason as .doc-step p: the note is the third child of a two column grid
+   below 780px, so it needs to be told which column it belongs in. */
+.doc-route span {
+  grid-column: 2;
+  font-size: 13px;
+  color: var(--ink-mute);
+}
+
+@media (min-width: 780px) {
+  .doc-route span {
+    grid-column: 3;
+  }
+}
+
+.doc-pre {
+  margin: 0;
+  border: 1px solid var(--rule);
+  background: var(--paper-sunk);
+  padding: 18px 20px;
+  overflow-x: auto;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12.5px;
+  line-height: 1.75;
+  color: var(--ink-body);
+}
+
+.doc-pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: inherit;
+  color: inherit;
+}
+
+.doc-pre b {
+  color: var(--ink);
+  font-weight: 400;
+}
+
+.doc-pre em {
+  font-style: normal;
+  color: var(--mark-text);
+}
+
+/* --------------------------------------------------------------- build ledger */
+
+.doc-ledger {
+  border-top: 2px solid var(--ink);
+}
+
+.doc-phase {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: baseline;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 14px;
+}
+
+.doc-phase i {
+  font-style: normal;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.doc-phase span {
+  color: var(--ink-mute);
+}
+
+.doc-phase em {
+  font-style: normal;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.doc-phase[data-mvp='true'] span {
+  color: var(--ink);
+}
+
+.doc-phase[data-mvp='true'] em {
+  color: var(--mark-text);
+}
+
+/* ------------------------------------------------------------------- closing */
+
+.doc-close {
+  border-top: 1px solid var(--rule);
+  background: var(--paper-sunk);
+  padding-block: clamp(48px, 8vw, 96px);
+}
+
+.doc-close h2 {
+  margin: 16px 0 0;
+  font-size: clamp(24px, 3.4vw, 38px);
+  line-height: 1.12;
+  letter-spacing: -0.028em;
+  font-weight: 700;
+  color: var(--ink);
+  max-width: 20ch;
+}
+
+.doc-close p {
+  margin: 18px 0 0;
+  max-width: 52ch;
+  color: var(--ink-mute);
+}
+
+.doc-close__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px;
+  margin-top: 32px;
+}
+
+/* ------------------------------------------------------------------- motion */
+
+.doc-reveal {
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 420ms ease, transform 420ms ease;
+}
+
+.doc-reveal[data-shown='true'] {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp *,
+  .lp *::before,
+  .lp *::after {
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
+  }
+
+  .doc-reveal {
+    opacity: 1;
+    transform: none;
+  }
+}

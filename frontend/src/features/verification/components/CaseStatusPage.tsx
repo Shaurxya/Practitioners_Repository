@@ -6,7 +6,7 @@ import { formatDate } from '@/lib/formatters'
 import { cn } from '@/lib/cn'
 import { useVerificationCase } from '../hooks/useVerificationCase'
 import { outcomeCopy } from '../outcome'
-import { councilLabel } from '../councils'
+import { councilLabel, useCouncils } from '../councils'
 import { ProgressTracker } from './ProgressTracker'
 import type { OutcomeCopy } from '../outcome'
 
@@ -20,6 +20,8 @@ const TONE_CLASS: Record<OutcomeCopy['tone'], string> = {
 export function CaseStatusPage() {
   const { caseId } = useParams<{ caseId: string }>()
   const query = useVerificationCase(caseId)
+  // Falls back to the code, so the panel never waits on reference data.
+  const councils = useCouncils()
 
   if (query.isPending) {
     return (
@@ -43,14 +45,17 @@ export function CaseStatusPage() {
   const isVerified = detail.outcomeCode === 'VERIFIED'
 
   return (
-    <div className="space-y-8">
-      <header className="space-y-1">
-        <Link to="/cases" className="text-sm text-content-muted underline underline-offset-2">
-          All my claims
-        </Link>
-        <h1 className="text-xl font-semibold text-content">Your verification</h1>
-        <p className="font-mono text-sm text-content-subtle">
-          Case reference {detail.caseId.slice(0, 8)}
+    <div className="doc space-y-8">
+      <header className="page-head page-head--ruled">
+        <p className="mono-label">
+          <span className="mark" aria-hidden="true" />
+          Case {detail.caseId.slice(0, 8)}
+        </p>
+        <h1>Your verification</h1>
+        <p>
+          <Link to="/cases" className="underline decoration-border-strong underline-offset-4">
+            All my claims
+          </Link>
         </p>
       </header>
 
@@ -58,9 +63,9 @@ export function CaseStatusPage() {
           bare tick. Every terminal state answers "so what do I do now". */}
       <section
         aria-live="polite"
-        className={cn('rounded-[--radius-panel] border p-5', TONE_CLASS[copy.tone])}
+        className={cn('border border-l-2 p-5', TONE_CLASS[copy.tone])}
       >
-        <h2 className="text-lg font-semibold text-content">
+        <h2 className="text-heading-sm font-bold tracking-tight text-content">
           {isVerified && detail.verifiedAsOf
             ? `Verified as of ${formatDate(detail.verifiedAsOf)}`
             : copy.headline}
@@ -109,7 +114,7 @@ export function CaseStatusPage() {
             label="Registration number"
             value={<span className="font-mono tabular-nums">{detail.claim.registrationNumber}</span>}
           />
-          <DetailRow label="Council" value={councilLabel(detail.claim.council)} />
+          <DetailRow label="Council" value={councilLabel(detail.claim.council, councils.data)} />
           <DetailRow label="Specialty" value={detail.claim.specialty} />
           <DetailRow label="Submitted" value={formatDate(detail.submittedAt)} />
         </dl>

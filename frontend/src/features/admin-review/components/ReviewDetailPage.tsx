@@ -111,7 +111,7 @@ export function ReviewDetailPage() {
     return () => window.removeEventListener('keydown', handle)
   })
 
-  if (query.isPending) return <LoadingPanel label="Loading case" />
+  if (query.isPending) return <div className="pt-8"><LoadingPanel label="Loading case" /></div>
 
   if (query.isError) {
     const copy = errorCopy(query.error)
@@ -129,7 +129,7 @@ export function ReviewDetailPage() {
   const alreadyDecided = detail.decidedAt !== null
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pt-8">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Button size="sm" variant="ghost" onClick={() => void navigate('/admin')}>
@@ -246,7 +246,7 @@ export function ReviewDetailPage() {
       </div>
 
       {!alreadyDecided && (
-        <div className="sticky bottom-0 space-y-3 rounded-[--radius-panel] border border-border bg-surface p-4 shadow-sm">
+        <div className="sticky bottom-0 space-y-3 border-t-2 border-ink bg-surface p-4">
           <TextAreaField
             label="Reason"
             required

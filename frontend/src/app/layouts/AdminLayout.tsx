@@ -1,15 +1,15 @@
 import { Outlet } from 'react-router-dom'
+import { Colophon, Masthead } from '@/app/layouts/Chrome'
 
-/** Reviewer shell. Wider than RootLayout because the queue is a dense table. */
+/** Reviewer shell. Same chrome as the portal, wider measure: the queue is a dense table. */
 export function AdminLayout() {
   return (
-    <div className="min-h-full bg-canvas text-content">
-      <header className="border-b border-border px-6 py-4">
-        <span className="text-sm font-medium">Review console</span>
-      </header>
-      <main className="mx-auto max-w-6xl px-6 py-8">
+    <div className="flex min-h-screen flex-col bg-canvas text-content">
+      <Masthead variant="console" />
+      <main className="shell shell--wide grow pb-20">
         <Outlet />
       </main>
+      <Colophon wide />
     </div>
   )
 }

@@ -1,0 +1,8 @@
+# The OCR path, installed only in the container.
+#
+# Separate from requirements.txt on purpose: paddle publishes no wheel for
+# Python 3.13 or 3.14, so pinning it in the base file would make the service
+# uninstallable on a current Python and take the text layer path down with it.
+-r requirements.txt
+paddlepaddle==2.6.2
+paddleocr==2.9.1

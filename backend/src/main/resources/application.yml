@@ -10,6 +10,30 @@ spring:
   application:
     name: verification-service
 
+  # ---------------------------------------------------------------------------
+  # THE SINGLE ENV FILE
+  #
+  # Spring Boot has no native .env support the way python-dotenv does. What it
+  # does have is config import: the [.properties] hint tells it to parse a file
+  # with no recognised extension using the properties loader, and KEY=VALUE
+  # lines are valid properties syntax. So one repo root .env feeds ${DB_URL} and
+  # friends below with nothing exported by hand.
+  #
+  # "optional:" means a missing file is not an error, which is what makes the
+  # same config work in production where no file exists.
+  #
+  # Two paths because the working directory differs: backend/ when you run
+  # mvnw from there, the repo root when you run it from there or from an IDE.
+  #
+  # Precedence, and the reason this is safe to deploy: real environment
+  # variables outrank imported config data in Spring's property source order.
+  # A platform injecting DB_PASSWORD always wins over anything in a file.
+  # ---------------------------------------------------------------------------
+  config:
+    import:
+      - optional:file:../.env[.properties]
+      - optional:file:./.env[.properties]
+
   # Which extra file to layer on. Override with the SPRING_PROFILES_ACTIVE
   # environment variable, or -Dspring-boot.run.profiles=<name>.
   profiles:
@@ -60,6 +84,13 @@ spring:
   # Runs pending migrations at startup, before Hibernate validates anything.
   # It creates a flyway_schema_history table and records each applied file.
   # ---------------------------------------------------------------------------
+  # Registers are large. The default multipart cap is 1 MB, which rejects every
+  # real council register with a message about nothing in particular.
+  servlet:
+    multipart:
+      max-file-size: 200MB
+      max-request-size: 200MB
+
   flyway:
     enabled: true
     # Where the .sql files live. "classpath:" means inside src/main/resources.
@@ -72,6 +103,20 @@ spring:
 # APPLICATION
 # -----------------------------------------------------------------------------
 app:
+  # ---------------------------------------------------------------------------
+  # PDF extraction sidecar
+  #
+  # Two timeouts because the two calls are nothing alike: classification counts
+  # characters and returns in seconds, extraction on a scanned 400 page register
+  # is an OCR run. One timeout would either kill every real extraction or let a
+  # dead sidecar hang a request for half an hour.
+  # ---------------------------------------------------------------------------
+  extraction:
+    base-url: ${EXTRACTION_URL:http://localhost:8000}
+    classify-timeout: ${EXTRACTION_CLASSIFY_TIMEOUT:2m}
+    extract-timeout: ${EXTRACTION_EXTRACT_TIMEOUT:30m}
+    upload-dir: ${UPLOAD_DIR:../data/uploads}
+
   ingest:
     # Path is relative to the working directory, which is backend/ when you run
     # mvnw from there. Override with APP_INGEST_FILE.

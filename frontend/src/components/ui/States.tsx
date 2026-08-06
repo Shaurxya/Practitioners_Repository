@@ -16,7 +16,7 @@ export function Spinner({ label = 'Loading' }: { label?: string }) {
     <span role="status" aria-label={label} className="inline-flex items-center">
       <span
         aria-hidden="true"
-        className="size-4 animate-spin rounded-full border-2 border-border-strong border-t-content"
+        className="size-4 animate-spin rounded-full border border-border-strong border-t-content"
       />
     </span>
   )
@@ -24,12 +24,12 @@ export function Spinner({ label = 'Loading' }: { label?: string }) {
 
 /** Grey block standing in for content whose shape we already know. */
 export function Skeleton({ className }: { className?: string }) {
-  return <div aria-hidden="true" className={cn('animate-pulse rounded bg-surface-raised', className)} />
+  return <div aria-hidden="true" className={cn('animate-pulse bg-surface-raised', className)} />
 }
 
 export function LoadingPanel({ label = 'Loading' }: { label?: string }) {
   return (
-    <div className="flex items-center gap-3 py-10 text-sm text-content-muted">
+    <div className="flex items-center gap-3 py-10 text-body-sm text-content-muted">
       <Spinner label={label} />
       {label}
     </div>
@@ -45,10 +45,10 @@ interface EmptyStateProps {
 /** An empty state is an invitation to act, not a dead end. */
 export function EmptyState({ title, body, action }: EmptyStateProps) {
   return (
-    <div className="rounded-[--radius-panel] border border-dashed border-border px-6 py-12 text-center">
-      <p className="text-base font-medium text-content">{title}</p>
-      {body && <p className="mx-auto mt-1.5 max-w-md text-sm text-content-muted">{body}</p>}
-      {action && <div className="mt-4 flex justify-center">{action}</div>}
+    <div className="border border-dashed border-border px-6 py-12 text-center">
+      <p className="text-body-md font-medium text-content">{title}</p>
+      {body && <p className="mx-auto mt-2 max-w-md text-body-sm text-content-muted">{body}</p>}
+      {action && <div className="mt-5 flex justify-center">{action}</div>}
     </div>
   )
 }
@@ -64,12 +64,12 @@ export function ErrorState({ title, body, onRetry, retryLabel = 'Try again' }: E
   return (
     <div
       role="alert"
-      className="rounded-[--radius-panel] border border-rejected/40 bg-rejected-soft px-6 py-8 text-center"
+      className="border border-border border-l-2 border-l-rejected bg-rejected-soft px-6 py-6"
     >
-      <p className="text-base font-medium text-content">{title}</p>
-      {body && <p className="mx-auto mt-1.5 max-w-md text-sm text-content-muted">{body}</p>}
+      <p className="text-body-md font-medium text-content">{title}</p>
+      {body && <p className="mt-2 max-w-md text-body-sm text-content-muted">{body}</p>}
       {onRetry && (
-        <div className="mt-4 flex justify-center">
+        <div className="mt-5 flex">
           <Button variant="secondary" onClick={onRetry}>
             {retryLabel}
           </Button>

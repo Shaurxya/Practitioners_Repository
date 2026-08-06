@@ -37,11 +37,16 @@ export function PublicVerifyPage() {
   }
 
   return (
-    <div className="mx-auto max-w-xl space-y-6">
-      <header className="space-y-2">
-        <h1 className="text-xl font-semibold text-content">Check a practitioner</h1>
-        <p className="text-base text-content-muted">
-          Enter an Immortal ID to see whether that practitioner is currently verified.
+    <div className="doc space-y-8">
+      <header className="page-head page-head--ruled">
+        <p className="mono-label">
+          <span className="mark" aria-hidden="true" />
+          Public lookup
+        </p>
+        <h1>Check a practitioner</h1>
+        <p>
+          Enter an Immortal ID to see whether that practitioner is verified right now. No account,
+          and the answer carries the date and the registry batch it came from.
         </p>
       </header>
 

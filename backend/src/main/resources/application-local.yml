@@ -6,6 +6,11 @@
 # =============================================================================
 
 spring:
+  # No datasource block here on purpose. application.yml already points at the
+  # Docker Compose Postgres on localhost:5433, and every setting there reads an
+  # environment variable first, so a different database is DB_URL / DB_USERNAME /
+  # DB_PASSWORD in the shell rather than a credential written into a file that
+  # git is tracking.
   jpa:
     # Print every SQL statement Hibernate generates. Equivalent to
     # SQLAlchemy's echo=True. Very useful while learning, far too noisy in

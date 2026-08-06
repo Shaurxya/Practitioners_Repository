@@ -48,7 +48,13 @@ describe('ReviewQueuePage', () => {
     expect(seen[0]).toContain('sort=submittedAt%2Casc')
   })
 
-  it('says the team is caught up when nothing is waiting', async () => {
+  /**
+   * Says what is true of an empty queue without claiming why it is empty. It
+   * used to read "Everything submitted has been decided", which is false on a
+   * system where nothing has been submitted yet, and that is exactly the state
+   * a new deployment opens in.
+   */
+  it('describes an empty queue without inventing a reason for it', async () => {
     server.use(
       http.get('/api/v1/admin/review', () =>
         HttpResponse.json({
@@ -61,7 +67,10 @@ describe('ReviewQueuePage', () => {
       ),
     )
     renderQueue()
-    expect(await screen.findByText('No cases waiting. The queue is clear.')).toBeInTheDocument()
+    expect(await screen.findByText('No cases waiting.')).toBeInTheDocument()
+    expect(
+      await screen.findByText(/Claims submitted on the public site arrive here/),
+    ).toBeInTheDocument()
   })
 
   it('distinguishes an empty filter result from an empty queue', async () => {

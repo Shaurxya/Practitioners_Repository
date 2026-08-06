@@ -1,12 +1,37 @@
 /* Tailwind v4 entry. One import replaces the v3 @tailwind base/components/utilities. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import 'tailwindcss';
 @import './tokens.css';
+@import './chrome.css';
+@import './document.css';
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
     background-color: var(--color-canvas);
     color: var(--color-content);
-    font-feature-settings: 'cv01', 'ss01';
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv01', 'ss01', 'tnum';
     -webkit-font-smoothing: antialiased;
+  }
+
+  /* One focus treatment for the whole site, ink on paper, never removed. */
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--color-ink);
+    color: var(--color-canvas);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
   }
 }

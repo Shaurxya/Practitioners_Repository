@@ -18,8 +18,19 @@ export function formatDate(iso: string): string {
   }).format(new Date(iso))
 }
 
-/** Compact form for dense tables: 29 Jul, 14:02. */
-export function formatDateTime(iso: string): string {
+/**
+ * Compact form for dense tables: 29 Jul, 14:02.
+ *
+ * Returns a dash rather than throwing on a value it cannot parse. Intl throws
+ * RangeError on an Invalid Date, and inside a render that takes down the whole
+ * route: one badly shaped timestamp from one endpoint replaced the entire case
+ * review screen with a 404 page. A missing date should read as missing.
+ */
+export function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return '–'
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return '–'
+
   return new Intl.DateTimeFormat('en-GB', {
     day: '2-digit',
     month: 'short',
@@ -27,7 +38,7 @@ export function formatDateTime(iso: string): string {
     minute: '2-digit',
     hour12: false,
     timeZone: TZ,
-  }).format(new Date(iso))
+  }).format(date)
 }
 
 /** Never render a bare tick. Verification is always "as of" a point in time. */

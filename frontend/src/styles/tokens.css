@@ -1,115 +1,189 @@
 /*
-  Design tokens. Semantic names only: components reference --color-surface,
-  never a raw hex value or a numbered palette step. Retheming then means
-  editing this file and nothing else.
+  Design tokens. One palette for the whole site: the landing page, the
+  practitioner portal and the review console all read from these.
 
-  Tailwind v4 reads @theme and generates utilities from it, so
-  --color-surface here becomes bg-surface, text-surface, border-surface.
+  The system is paper and ink. A near white paper ground, near black ink,
+  hairline rules, square corners, and colour reserved for one job only: saying
+  what happened to a verification. Interactive elements are ink, not a brand
+  colour, so the only saturated pixels on any screen are status.
 
-  Two consumers with opposite priorities share these colours:
-  the review console is a dense desktop tool used all day, the practitioner
-  portal is used once a year on a phone. Colour is shared, density is not.
+  Tailwind v4 reads @theme and generates utilities from it, and also emits every
+  key as a custom property on :root, so plain CSS files can use var(--color-ink)
+  and stay in step with the utility classes.
 */
+
 @theme {
-  /* neutrals, Linear / Vercel / Raycast register: near black on near white */
-  --color-canvas: oklch(99% 0 0);
-  --color-surface: oklch(100% 0 0);
-  --color-surface-raised: oklch(97.5% 0 0);
-  --color-border: oklch(92% 0 0);
-  --color-border-strong: oklch(85% 0 0);
+  /* ---- Paper ------------------------------------------------------------ */
+  --color-paper: #ffffff;
+  --color-paper-sunk: #f6f6f5;
+  --color-paper-dark: #0c0c0b;
+  --color-paper-dark-raised: #141413;
 
-  --color-content: oklch(20% 0 0);
-  --color-content-muted: oklch(52% 0 0);
-  --color-content-subtle: oklch(65% 0 0);
+  /* ---- Ink -------------------------------------------------------------- */
+  --color-ink: #111110;
+  --color-body: #33332e;
+  --color-mute: #6b6b64;
+  --color-stone: #82827a;
+  --color-ash: #97978f;
+  --color-on-dark: #f4f4ef;
+  --color-on-dark-mute: rgba(244, 244, 239, 0.68);
 
-  /* one accent, no gradients */
-  --color-accent: oklch(55% 0.16 250);
-  --color-accent-hover: oklch(48% 0.16 250);
-  --color-accent-content: oklch(99% 0 0);
+  /* ---- Rules ------------------------------------------------------------ */
+  --color-hairline: #e4e4e0;
+  --color-hairline-strong: #c9c9c2;
 
-  /* status, mapped to case outcomes rather than to colour names */
-  --color-verified: oklch(60% 0.14 155);
-  --color-pending: oklch(70% 0.14 75);
-  --color-review: oklch(65% 0.15 55);
-  --color-rejected: oklch(58% 0.19 25);
+  /* ---- Status ----------------------------------------------------------- */
+  /* Muted enough to sit on paper without shouting, separated enough in
+     lightness to survive a grayscale screenshot. Status is never carried by
+     colour alone, see StatusBadge. */
+  --color-verified: #2c6e49;
+  --color-review: #8a5a00;
+  --color-pending: #5c5c54;
+  --color-error: #9b2226;
+  --color-error-deep: #6d181b;
+  --color-warning: #8a5a00;
+  --color-warning-bright: #a97400;
+  --color-success-deep: #2c6e49;
+  --color-link-blue: #1f4b8f;
 
-  /* Soft backgrounds for status chips. A chip filled with the full status
-     colour fails contrast against the label, so the fill is a tint and the
-     text stays --color-content. */
-  --color-verified-soft: oklch(95% 0.04 155);
-  --color-pending-soft: oklch(96% 0.04 75);
-  --color-review-soft: oklch(96% 0.05 55);
-  --color-rejected-soft: oklch(95% 0.04 25);
+  --color-row-hover: #f7f7f6;
+  --color-row-selected: #eeeeec;
 
-  /* Focus. Keyboard first means this is a primary token, not an afterthought:
-     the console is designed to be cleared without touching the mouse. */
-  --color-focus: oklch(62% 0.19 250);
+  --color-verified-soft: rgba(44, 110, 73, 0.09);
+  --color-pending-soft: rgba(92, 92, 84, 0.08);
+  --color-review-soft: rgba(138, 90, 0, 0.09);
+  --color-rejected-soft: rgba(155, 34, 38, 0.08);
 
-  /* Destructive intent, deliberately separate from --color-rejected.
-     A reject button and a rejected badge are different things, and sharing a
-     token means you cannot restyle one without the other. */
-  --color-danger: oklch(55% 0.2 25);
-  --color-danger-hover: oklch(48% 0.2 25);
-  --color-danger-content: oklch(99% 0 0);
+  /* ---- Aliases ---------------------------------------------------------- */
+  /* The app was written against these names. They stay, repointed, so a single
+     file changes the look of every screen. */
+  --color-canvas: var(--color-paper);
+  --color-surface: var(--color-paper);
+  --color-surface-soft: var(--color-paper-sunk);
+  --color-surface-raised: var(--color-paper-sunk);
+  --color-surface-dark: var(--color-paper-dark);
+  --color-surface-elevated: var(--color-paper-dark-raised);
 
-  /* The claim versus registry comparison. These three carry the whole diff
-     reading, so they are tokens rather than utility classes chosen per view. */
-  --color-diff-changed: oklch(96% 0.05 75);
-  --color-diff-changed-border: oklch(70% 0.14 75);
-  --color-diff-missing: oklch(96% 0.02 25);
+  --color-content: var(--color-ink);
+  --color-content-muted: var(--color-mute);
+  --color-content-subtle: var(--color-stone);
 
-  /* Dense table row states. */
-  --color-row-hover: oklch(97% 0 0);
-  --color-row-selected: oklch(95% 0.03 250);
+  --color-border: var(--color-hairline);
+  --color-border-strong: var(--color-hairline-strong);
 
-  /* Type scale, shifted down from web defaults. A console is read at a fixed
-     distance all day: 16px body means fewer rows per screen and more
-     scrolling per case. The portal opts back up by using text-base and above. */
-  --text-2xs: 0.6875rem;
-  --text-xs: 0.75rem;
-  --text-sm: 0.8125rem;
-  --text-base: 0.875rem;
-  --text-lg: 1rem;
-  --text-xl: 1.25rem;
+  /* Interactive is ink. There is no brand colour in this system. */
+  --color-primary: var(--color-ink);
+  --color-primary-dark: #000000;
+  --color-accent: var(--color-ink);
+  --color-accent-hover: #000000;
+  --color-accent-content: var(--color-paper);
+  --color-focus: var(--color-ink);
 
-  /* Mono is semantic here, not decoration. Registration numbers and case IDs
-     render mono with tabular numerals, which is what lets HRB-4417-K and
-     HRB-4417-X differ at a glance instead of character by character. */
+  --color-danger: var(--color-error);
+  --color-danger-hover: var(--color-error-deep);
+  --color-danger-content: var(--color-paper);
+  --color-rejected: var(--color-error);
+
+  /* ---- Type ------------------------------------------------------------- */
+  --text-display-xl: 44px;
+  --text-display-lg: 34px;
+  --text-heading-xl: 24px;
+  --text-heading-lg: 21px;
+  --text-heading-md: 19px;
+  --text-heading-sm: 17px;
+  --text-card-title: 15px;
+  --text-body-md: 15px;
+  --text-body-strong: 15px;
+  --text-body-sm: 14px;
+  --text-button-lg: 15px;
+  --text-button-md: 14px;
+  --text-button-sm: 13px;
+  --text-link-md: 14px;
+  --text-caption-md: 13px;
+  --text-caption-sm: 12px;
+  --text-caption-xs: 11px;
+  --text-utility-xs: 10px;
+
+  --text-2xs: var(--text-utility-xs);
+  --text-xs: var(--text-caption-xs);
+  --text-sm: var(--text-body-sm);
+  --text-base: var(--text-body-md);
+  --text-lg: var(--text-heading-sm);
+  --text-xl: var(--text-heading-md);
+
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
-  --radius-control: 6px;
-  --radius-panel: 10px;
+  /* ---- Shape ------------------------------------------------------------ */
+  /* Square. A rounded corner is a soft product signal and this is a document
+     about licences. --radius-full survives for spinners, which have to be
+     circles to read as spinning. */
+  --radius-none: 0px;
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-control: 0px;
+  --radius-panel: 0px;
+  --radius-full: 9999px;
+
+  /* ---- Space ------------------------------------------------------------ */
+  /* Named --space-* rather than --spacing-*. Tailwind resolves max-w-xl, w-lg
+     and friends against the --spacing namespace, so a token called
+     --spacing-xl: 24px silently turned max-w-xl into a 24px column. */
+  --space-xxs: 2px;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-xxl: 32px;
+  --space-section: 64px;
 }
 
-/*
-  Dark theme. Same token names, different values, so no component needs a
-  dark: variant to pick the right surface.
-
-  The tinted tokens are re-picked at low lightness rather than darkened,
-  because scaling a pale tint down turns it muddy and stops reading as a tint.
-*/
 @layer base {
   :root[data-theme='dark'] {
-    --color-canvas: oklch(15% 0 0);
-    --color-surface: oklch(18% 0 0);
-    --color-surface-raised: oklch(22% 0 0);
-    --color-border: oklch(27% 0 0);
-    --color-border-strong: oklch(35% 0 0);
+    --color-paper: #0c0c0b;
+    --color-paper-sunk: #141413;
 
-    --color-content: oklch(96% 0 0);
-    --color-content-muted: oklch(72% 0 0);
-    --color-content-subtle: oklch(58% 0 0);
+    --color-ink: #f4f4ef;
+    --color-body: #c9c9c0;
+    --color-mute: #8f8f85;
+    --color-stone: #7c7c73;
+    --color-ash: #6a6a62;
 
-    --color-verified-soft: oklch(28% 0.05 155);
-    --color-pending-soft: oklch(28% 0.05 75);
-    --color-review-soft: oklch(29% 0.06 55);
-    --color-rejected-soft: oklch(28% 0.06 25);
+    --color-hairline: #26261f;
+    --color-hairline-strong: #3a3a32;
 
-    --color-diff-changed: oklch(30% 0.06 75);
-    --color-diff-changed-border: oklch(50% 0.12 75);
-    --color-diff-missing: oklch(27% 0.03 25);
+    --color-verified: #6aa981;
+    --color-review: #c99a3a;
+    --color-pending: #9a9a90;
+    --color-error: #d97b7e;
 
-    --color-row-hover: oklch(22% 0 0);
-    --color-row-selected: oklch(27% 0.04 250);
+    --color-canvas: var(--color-paper);
+    --color-surface: var(--color-paper);
+    --color-surface-soft: var(--color-paper-sunk);
+    --color-surface-raised: var(--color-paper-sunk);
+
+    --color-content: var(--color-ink);
+    --color-content-muted: var(--color-mute);
+    --color-content-subtle: var(--color-stone);
+
+    --color-border: var(--color-hairline);
+    --color-border-strong: var(--color-hairline-strong);
+
+    --color-primary: var(--color-ink);
+    --color-primary-dark: #ffffff;
+    --color-accent: var(--color-ink);
+    --color-accent-hover: #ffffff;
+    --color-accent-content: #0c0c0b;
+    --color-focus: var(--color-ink);
+    --color-danger-content: #0c0c0b;
+
+    --color-row-hover: #161614;
+    --color-row-selected: #1e1e1b;
+
+    --color-verified-soft: rgba(106, 169, 129, 0.14);
+    --color-pending-soft: rgba(154, 154, 144, 0.12);
+    --color-review-soft: rgba(201, 154, 58, 0.14);
+    --color-rejected-soft: rgba(217, 123, 126, 0.13);
   }
 }

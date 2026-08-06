@@ -345,12 +345,28 @@ one `@Component` per rule, injected into the engine as `List<VerificationRule>`.
 
 | Code | Check | PASS | REVIEW | FAIL | Required in v1 |
 |---|---|---|---|---|---|
-| `LICENSE_ACTIVE` | registry status is active | active | - | anything else | yes |
+| `LICENSE_ACTIVE` | registry status is active | active | `UNKNOWN` | suspended, revoked, expired, inactive | yes |
 | `NOT_EXPIRED` | `valid_until` is in the future | future date | within grace window, see `D3` | past date | yes |
 | `NOT_SANCTIONED` | status is not suspended or revoked | clean | - | suspended or revoked | yes |
 | `NAME_MATCH` | similarity of claimed vs registry name | >= 0.90 | 0.75 to 0.90 | < 0.75 | yes |
 | `SINGLE_CANDIDATE` | exactly one candidate matched | 1 candidate | 2 or more | - | yes |
 | `DOC_CONSISTENT` | OCR license number equals the claim | equal | mismatch, or no OCR available | - | **no** until phase 9 |
+
+`LICENSE_ACTIVE` sends `UNKNOWN` to REVIEW rather than FAIL. This is the one
+place where "we could not read it" and "it is not active" must not collapse into
+the same answer. Real registers exist that publish no standing status at all:
+the NCISM provisional national registers print a registration number, a date and
+a board name, and nothing about suspension. Failing `UNKNOWN` would auto reject
+every practitioner in such a register, silently and in bulk, on a fact the
+document never asserted. Passing it would assert good standing we cannot see.
+REVIEW is the only honest third answer, and non negotiable 8 already says
+ambiguity goes to a person.
+
+The absence is recorded deliberately, not inferred. The column mapping screen
+requires the admin to tick "this register does not publish a standing status"
+before it will accept a mapping with no status column, because a forgotten
+mapping and a register that genuinely has none look identical in the column map
+and need opposite outcomes.
 
 `LICENSE_FOUND` is removed from the catalog. It is a matching stage outcome, not
 a rule. Reaching RULES_EVAL already proves a record was found, so the rule could
@@ -623,6 +639,14 @@ an unauthenticated review queue.
 | `D5` | Rate limit strategy on the public endpoint | (a) Bucket4j in memory (b) Bucket4j backed by Redis | **(a) for v1** at a single instance. Move to (b) the moment there are two app instances, because in memory limits multiply by instance count. | phase 10 |
 
 ---
+
+### 12.1 Resolved
+
+| ID | Decision | Resolution | Consequence |
+|---|---|---|---|
+| `D6` | Where the council comes from | **The batch, asserted once at upload.** Most registers never print their own council on a row, so requiring it as a mapped column made the mapping screen unfinishable for the ordinary case. A council column stays mappable and overrides per row, for registers like Gujarat's that do print one. | `councils` seeded for all 36 states and union territories on ISO 3166-2:IN codes, which is also what NCISM embeds in `NR/AY/GA/0000001`. `registry_records.council_raw` becomes nullable, see `D7`. |
+| `D7` | `council_raw` when the council was not in the document | **Nullable.** The alternative, copying the canonical name in at promote time, fabricates a provenance record: later, that row is indistinguishable from one where the document really did say it. NULL says the true thing. `council_code` stays NOT NULL, since it is half the natural key. | `V5__council_raw_nullable.sql` |
+| `D8` | Composite source columns | **Out of scope for v1.** The NCISM registers pack four sub fields into one "registration particulars" cell. Everything in it is redundant or optional here: the state registration number is a per state serial and we key on the national number, the register name duplicates the batch council, renewable-or-permanent is not standing. That leaves `registration_date`, which is nullable and read by no rule. | Admins map the column to "ignore". Revisit when a field inside a composite cell is actually needed, as a per field regex on the profile. |
 
 ## 13. Out of scope for v1
 
