@@ -97,11 +97,79 @@
       <version>1.14.1</version>
     </dependency>
 
+    <!-- S3 CLIENT, for identity documents in MinIO.
+         The AWS SDK v2 rather than the MinIO client, because MinIO speaks the
+         S3 API and this is the one dependency that also works unchanged against
+         real S3 in production: the difference is an endpoint, not a library.
+         apache-client is pulled explicitly so the SDK does not fall back to the
+         Netty async client, which drags in a whole event loop for what is a
+         handful of small synchronous puts. -->
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>s3</artifactId>
+      <version>2.49.6</version>
+      <exclusions>
+        <exclusion>
+          <groupId>software.amazon.awssdk</groupId>
+          <artifactId>netty-nio-client</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <!-- SPRING SECURITY.
+         Brings the servlet filter chain, the authentication objects, and
+         BCryptPasswordEncoder. Adding it changes the default posture of the
+         whole application: every endpoint is denied until SecurityConfig says
+         otherwise. That default is the point. The FastAPI equivalent would be
+         a dependency applied to the whole router rather than per route. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
+
+    <!-- JJWT. Signs and verifies the access token.
+         Split across three artifacts on purpose by its authors: only the api
+         jar is compiled against, so application code cannot accidentally
+         depend on implementation internals. impl and jackson are runtime. -->
+    <dependency>
+      <groupId>io.jsonwebtoken</groupId>
+      <artifactId>jjwt-api</artifactId>
+      <version>0.12.6</version>
+    </dependency>
+    <dependency>
+      <groupId>io.jsonwebtoken</groupId>
+      <artifactId>jjwt-impl</artifactId>
+      <version>0.12.6</version>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.jsonwebtoken</groupId>
+      <artifactId>jjwt-jackson</artifactId>
+      <version>0.12.6</version>
+      <scope>runtime</scope>
+    </dependency>
+
+    <!-- NO CACHE LIBRARY, DELIBERATELY.
+         Two things here want caching: the API key lookup, so a request
+         authenticated by a key does not hit Postgres every call, and the login
+         attempt counter. Both are a bounded map with a TTL and nothing else,
+         which is util/TtlCache: about forty lines, no eviction policy worth
+         arguing about, and no transitive dependencies. Reach for Caffeine when
+         something here needs a real eviction policy or hit statistics. -->
+
     <!-- JUnit 5, AssertJ, Mockito, and Spring's test support in one dependency.
          test scope keeps all of it out of the shipped jar. -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- MockMvc helpers that understand authentication: with(user(...)),
+         csrf(), and the assertions for an unauthenticated response. -->
+    <dependency>
+      <groupId>org.springframework.security</groupId>
+      <artifactId>spring-security-test</artifactId>
       <scope>test</scope>
     </dependency>
 

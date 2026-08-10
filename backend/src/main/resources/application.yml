@@ -104,6 +104,44 @@ spring:
 # -----------------------------------------------------------------------------
 app:
   # ---------------------------------------------------------------------------
+  # AUTHENTICATION
+  #
+  # Bound to AuthProperties, which holds the defaults. Only the values that
+  # differ from those defaults, or that have none, appear here.
+  #
+  # secret has NO default anywhere, deliberately. A signing key with a default
+  # is a signing key everyone who has read this repository knows, and the
+  # application refuses to start rather than issue forgeable tokens. Generate
+  # one with:  openssl rand -base64 48
+  # ---------------------------------------------------------------------------
+  auth:
+    secret: ${AUTH_SECRET:}
+    issuer: herbimmortal-verification
+
+    # Short because it cannot be revoked. This is the maximum delay between
+    # locking an account and that taking effect. Raising it trades that
+    # guarantee for slightly fewer refresh calls, which is a bad trade.
+    access-token-ttl: 15m
+
+    # Long because it can be revoked, and because being signed out weekly is
+    # what makes people pick worse passwords.
+    refresh-token-ttl: 30d
+
+    max-failed-logins: 8
+    lock-duration: 15m
+
+    # Also the maximum delay between revoking an API key and it stopping working
+    # on another instance. Revocation on this instance is immediate.
+    api-key-cache-ttl: 60s
+    api-key-use-window: 5m
+
+    # The first administrator, created once on an empty database and ignored
+    # forever after. Not set here: it comes from .env so this file never
+    # contains a credential. See BootstrapAdmin.
+    bootstrap-admin-email: ${AUTH_BOOTSTRAP_ADMIN_EMAIL:}
+    bootstrap-admin-password: ${AUTH_BOOTSTRAP_ADMIN_PASSWORD:}
+
+  # ---------------------------------------------------------------------------
   # PDF extraction sidecar
   #
   # Two timeouts because the two calls are nothing alike: classification counts
@@ -116,6 +154,38 @@ app:
     classify-timeout: ${EXTRACTION_CLASSIFY_TIMEOUT:2m}
     extract-timeout: ${EXTRACTION_EXTRACT_TIMEOUT:30m}
     upload-dir: ${UPLOAD_DIR:../data/uploads}
+
+  # ---------------------------------------------------------------------------
+  # IDENTITY DOCUMENTS
+  #
+  # The photo ID and the liveness selfie. The most sensitive data this system
+  # holds, so two things here are not optional.
+  #
+  # master-key has NO default, exactly like auth.secret. It wraps the per
+  # document key that protects a government ID, and a default would be one
+  # everybody who has read this repository holds. The application refuses to
+  # start without it. Generate with:  openssl rand -base64 32
+  #
+  # endpoint points at MinIO locally. Leave it empty against real S3 and the
+  # SDK resolves the region's endpoint itself. Nothing else changes: MinIO
+  # speaks the S3 API, which is why the AWS SDK is the dependency rather than
+  # the MinIO client.
+  # ---------------------------------------------------------------------------
+  documents:
+    master-key: ${DOCUMENT_MASTER_KEY:}
+    bucket: ${DOCUMENT_BUCKET:identity-documents}
+    endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+    access-key: ${MINIO_ROOT_USER:verification}
+    secret-key: ${MINIO_ROOT_PASSWORD:verification-minio}
+    region: ${DOCUMENT_REGION:us-east-1}
+    # 10 MB. A phone photo of a passport is one to four; past this it is a
+    # video or a mistake, and both should be refused before being read into
+    # memory rather than after.
+    max-bytes: ${DOCUMENT_MAX_BYTES:10485760}
+    # Days after a case goes terminal before the document key is destroyed.
+    # There is no reason to hold a government ID forever: the decision, the
+    # rule results and the registry snapshot are the durable record.
+    retain-after-decision-days: ${DOCUMENT_RETENTION_DAYS:90}
 
   ingest:
     # Path is relative to the working directory, which is backend/ when you run

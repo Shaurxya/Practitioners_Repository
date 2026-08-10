@@ -1,6 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { LoadingPanel } from '@/components/ui/States'
-import { useCurrentUser } from '../hooks/useCurrentUser'
+import { useIsAuthenticated } from '../hooks/useCurrentUser'
 
 /**
  * Route guard for the admin console.
@@ -12,10 +12,11 @@ import { useCurrentUser } from '../hooks/useCurrentUser'
  *
  *   1. network      the extraction sidecar binds to loopback and is never
  *                   published in docker compose
- *   2. identity     one admin account, password hash from configuration, short
- *                   lived JWT, no users table because there is exactly one user
- *   3. authorization @PreAuthorize("hasRole('ADMIN')") on every admin endpoint,
- *                   plus a single allowed subject in configuration
+ *   2. identity     real accounts in a users table, BCrypt password hashes,
+ *                   short lived JWTs and revocable refresh tokens
+ *   3. authorization SecurityConfig denies by default, /api/v1/admin/** needs
+ *                   REVIEWER or ADMIN, and the import endpoints need ADMIN
+ *                   because promoting a batch decides who counts as licensed
  *   4. this file    so an unauthenticated browser gets a sign in page rather
  *                   than seven screens of empty tables and 401s
  *
@@ -25,18 +26,22 @@ import { useCurrentUser } from '../hooks/useCurrentUser'
  */
 export function RequireAdmin() {
   const location = useLocation()
-  const user = useCurrentUser()
+  const { isAuthenticated, isResolving, user } = useIsAuthenticated()
 
-  if (user.isPending) return <LoadingPanel label="Checking your session" />
+  if (isResolving) return <LoadingPanel label="Checking your session" />
 
-  if (user.isError || !user.data) {
+  if (!isAuthenticated || !user) {
     // The path is carried through so signing in returns you to the screen you
     // asked for, not to the console root.
     const next = encodeURIComponent(location.pathname + location.search)
     return <Navigate to={`/login?next=${next}`} replace />
   }
 
-  if (user.data.role !== 'ADMIN') {
+  // Reviewers work the queue, so the console is theirs too. The endpoints the
+  // console calls draw the finer line: /api/v1/admin/imports is ADMIN only, so
+  // a reviewer reaching the imports screen sees it refuse, which is the correct
+  // place for that refusal to come from.
+  if (user.role !== 'ADMIN' && user.role !== 'REVIEWER') {
     // 404 rather than a "you are not allowed" screen, matching the ownership
     // rule in section 7.3: the console does not confirm to a signed in
     // practitioner that an admin console exists at this URL.

@@ -155,29 +155,47 @@ describe('the decision', () => {
 })
 
 describe('the Immortal ID', () => {
+  const AYURVEDA_IN = { countryCode: 'IN', medicalSystemCode: 'A' }
+
   it('has the shape section 8.2 specifies', () => {
-    expect(issueImmortalId()).toMatch(/^HI-[0-9A-HJKMNP-TV-Z]{5}-[0-9A-HJKMNP-TV-Z]{5}$/)
+    expect(issueImmortalId({ ...AYURVEDA_IN, year: 2026 })).toMatch(/^HI-26INA-[A-Z0-9]{5}$/)
   })
 
-  /** Crockford omits I, L, O and U, so 1/I, 0/O and V/U cannot be transcribed wrong. */
-  it('never contains a character that can be misread', () => {
-    for (let i = 0; i < 200; i++) {
-      const body = issueImmortalId().slice('HI-'.length)
-      expect(body).not.toMatch(/[ILOU]/)
+  it('carries the year, country and system it was issued under', () => {
+    expect(issueImmortalId({ countryCode: 'US', medicalSystemCode: 'T', year: 2031 })).toMatch(
+      /^HI-31UST-/,
+    )
+  })
+
+  /**
+   * The old format was Crockford base32, which omits I, L, O and U. This one is
+   * plain A-Z and 0-9. A generator that quietly kept the Crockford alphabet
+   * would shrink the space by 40 percent while the capacity note went on
+   * claiming 36^5, so the presence of those four characters is the assertion.
+   */
+  it('uses the full 36 character alphabet, not Crockford', () => {
+    const seen = new Set<string>()
+    for (let i = 0; i < 5000; i++) {
+      for (const char of issueImmortalId(AYURVEDA_IN).slice('HI-26INA-'.length)) seen.add(char)
     }
+    for (const char of 'ILOU') expect(seen.has(char)).toBe(true)
+    expect(seen.size).toBe(36)
   })
 
-  it('catches a single mistyped character', () => {
-    const id = issueImmortalId()
-    expect(isValidImmortalId(id)).toBe(true)
-
-    // Swap one body character for a different valid one.
-    const broken = id.replace(/[0-9A-HJKMNP-TV-Z]/, (c) => (c === '7' ? '8' : '7'))
-    expect(isValidImmortalId(broken)).toBe(false)
+  it('accepts what it issues and rejects the wrong shape', () => {
+    expect(isValidImmortalId(issueImmortalId(AYURVEDA_IN))).toBe(true)
+    expect(isValidImmortalId('HI-26INA-K3M7')).toBe(false)
+    expect(isValidImmortalId('HI-K3M7Q-8XT2P')).toBe(false)
   })
 
-  it('does not collide across a realistic number of issues', () => {
-    const seen = new Set(Array.from({ length: 5000 }, () => issueImmortalId()))
+  /**
+   * Not a probability assertion. The mock records every ID it hands out and
+   * redraws on a clash, exactly as the real issuer checks the table, so a
+   * duplicate here means the uniqueness loop is broken rather than that the
+   * dice were unlucky.
+   */
+  it('never issues the same ID twice', () => {
+    const seen = new Set(Array.from({ length: 5000 }, () => issueImmortalId(AYURVEDA_IN)))
     expect(seen.size).toBe(5000)
   })
 })

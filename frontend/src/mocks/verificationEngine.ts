@@ -351,41 +351,58 @@ export function decide(candidates: MatchCandidate[], results: RuleResult[]): Dec
 // ---------------------------------------------------------------------------
 // 8.2 Immortal ID
 //
-// HI-XXXXX-XXXXX: 9 random Crockford base32 characters plus a Luhn mod 32 check
-// character, grouped 5 and 5 so it reads aloud in two chunks.
+// HI-YYCCM-RRRRR: registration year, ISO 3166-1 alpha-2 country, medical system
+// code, then five random characters from A-Z and 0-9.
+//
+// Modelling the real generator's uniqueness loop rather than just its shape is
+// deliberate. The five random characters give 36^5 = 60,466,176 values PER
+// (year, country, system) prefix, not globally, and a mock that ignores that
+// would let the browser demo issue a duplicate the real system would refuse.
 // ---------------------------------------------------------------------------
 
-/** No I, L, O or U, so the classic transcription errors cannot occur. */
-const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
+const SUFFIX_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
 
-function luhnMod32(input: string): string {
-  const n = CROCKFORD.length
-  let factor = 2
-  let sum = 0
+/** Every ID this session has handed out, standing in for the UNIQUE constraint. */
+const issued = new Set<string>()
 
-  for (let i = input.length - 1; i >= 0; i--) {
-    const codePoint = CROCKFORD.indexOf(input[i] as string)
-    let addend = factor * codePoint
-    factor = factor === 2 ? 1 : 2
-    addend = Math.floor(addend / n) + (addend % n)
-    sum += addend
+export function resetIssuedImmortalIds() {
+  issued.clear()
+}
+
+function randomSuffix(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(5))
+  return [...bytes].map((b) => SUFFIX_ALPHABET[b % SUFFIX_ALPHABET.length]).join('')
+}
+
+/**
+ * Issues an ID for one practitioner.
+ *
+ * Only the suffix is redrawn on a clash. The other four characters are facts
+ * about the person, and redrawing them would produce an identifier that lies
+ * about who it belongs to, which is worse than the collision it was avoiding.
+ */
+export function issueImmortalId(options: {
+  countryCode: string
+  medicalSystemCode: string
+  year?: number
+}): string {
+  const year = options.year ?? new Date().getFullYear()
+  const prefix = `HI-${String(year % 100).padStart(2, '0')}${options.countryCode.toUpperCase()}${options.medicalSystemCode.toUpperCase()}-`
+
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const candidate = prefix + randomSuffix()
+    if (!issued.has(candidate)) {
+      issued.add(candidate)
+      return candidate
+    }
   }
-
-  return CROCKFORD[(n - (sum % n)) % n] as string
+  throw new Error(`No free Immortal ID under ${prefix}. That prefix is saturated.`)
 }
 
-export function issueImmortalId(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(9))
-  const body = [...bytes].map((b) => CROCKFORD[b % CROCKFORD.length]).join('')
-  const full = body + luhnMod32(body)
-  return `HI-${full.slice(0, 5)}-${full.slice(5)}`
-}
-
-/** The client validates this before a request is sent. */
+/**
+ * Shape only. There is no check character in this format, so a typo inside the
+ * random segment is indistinguishable from someone else's valid ID.
+ */
 export function isValidImmortalId(id: string): boolean {
-  const compact = id.replace(/[^0-9A-Za-z]/g, '').toUpperCase()
-  if (!compact.startsWith('HI') || compact.length !== 12) return false
-  const payload = compact.slice(2)
-  if ([...payload].some((c) => !CROCKFORD.includes(c))) return false
-  return luhnMod32(payload.slice(0, 9)) === payload[9]
+  return /^HI-\d{2}[A-Z]{2}[A-Z]-[A-Z0-9]{5}$/.test(id.trim().toUpperCase())
 }

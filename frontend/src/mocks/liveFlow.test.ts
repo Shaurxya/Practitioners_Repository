@@ -18,7 +18,9 @@ const CLAIM = {
   fullName: 'Prabhudessai Vinayak',
   registrationNumber: 'NR/AY/GA/0000001',
   council: 'GA',
-  specialty: 'Ayurveda',
+  specialty: 'Other',
+  country: 'IN',
+  medicalSystem: 'A',
 }
 
 async function json(path: string, init?: RequestInit) {
@@ -148,7 +150,64 @@ describe('authentication', () => {
     })
 
     expect(JSON.stringify(me.body)).not.toContain('admin@password')
-    expect(Object.keys(me.body)).toEqual(['id', 'email', 'fullName', 'role', 'immortalId'])
+    // The exact key list, not a subset check. An allowlist is what catches a
+    // field being added to the account object later and published to every
+    // browser on every page load, which is exactly how this leaks: not at the
+    // call site, but because the secret was put inside a record something else
+    // already returns whole.
+    expect(Object.keys(me.body)).toEqual([
+      'id',
+      'email',
+      'fullName',
+      'role',
+      'immortalId',
+      'authenticatedBy',
+    ])
+
+    // The sign in response carries the account too, so it needs the same check.
+    expect(JSON.stringify(login.body)).not.toContain('admin@password')
+  })
+
+  /**
+   * Signing up must never grant a role from the request body. A mock that did
+   * would let the console's guard be tested against a lie, and the guard would
+   * pass.
+   */
+  it('ignores a role asked for at sign up', async () => {
+    const created = await json('/api/v1/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'escalate@example.com',
+        password: 'a sufficiently long passphrase',
+        fullName: 'Escalation Attempt',
+        role: 'ADMIN',
+      }),
+    })
+
+    expect(created.status).toBe(201)
+    expect(created.body.user.role).toBe('PRACTITIONER')
+  })
+
+  it('refuses a password too short to be worth hashing', async () => {
+    const refused = await json('/api/v1/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'short@example.com', password: 'short', fullName: 'Short Pass' }),
+    })
+    expect(refused.status).toBe(400)
+  })
+
+  it('refuses a second account on the same address', async () => {
+    const body = JSON.stringify({
+      email: 'twice@example.com',
+      password: 'a sufficiently long passphrase',
+      fullName: 'Twice Over',
+    })
+    const headers = { 'Content-Type': 'application/json' }
+
+    expect((await json('/api/v1/auth/register', { method: 'POST', headers, body })).status).toBe(201)
+    expect((await json('/api/v1/auth/register', { method: 'POST', headers, body })).status).toBe(409)
   })
 
   it('identifies the account the token belongs to', async () => {
@@ -189,7 +248,9 @@ describe('a manual approval', () => {
     fullName: 'Vernekar Premanand Laxman',
     registrationNumber: 'NR/AY/GA/0000002',
     council: 'GA',
-    specialty: 'Ayurveda',
+    specialty: 'Other',
+    country: 'IN',
+    medicalSystem: 'A',
   }
 
   async function submitAndApprove(reason = 'Checked by hand against the council register.') {
@@ -211,7 +272,12 @@ describe('a manual approval', () => {
 
     expect(after.body.status).toBe('APPROVED')
     expect(after.body.outcomeCode).toBe('VERIFIED')
-    expect(after.body.immortalId).toMatch(/^HI-[0-9A-HJKMNP-TV-Z]{5}-[0-9A-HJKMNP-TV-Z]{5}$/)
+    // Goa is India, and the claim says Ayurveda, so the fixed segments are
+    // not free: an ID that decoded to anything else here would mean the
+    // issuer read the wrong source for them.
+    expect(after.body.immortalId).toMatch(
+      new RegExp(`^HI-${String(new Date().getFullYear() % 100)}INA-[A-Z0-9]{5}$`),
+    )
     expect(after.body.verifiedAsOf).not.toBeNull()
   })
 

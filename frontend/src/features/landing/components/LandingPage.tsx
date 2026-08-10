@@ -26,8 +26,9 @@ import {
  * palette and type as every other route.
  *
  * The one piece of application code it imports is buildImmortalId, so the
- * specimen in section 02 carries a real check character rather than a plausible
- * looking one. If the algorithm changes, the specimen changes with it.
+ * specimen in section 02 is a genuinely valid identifier rather than a
+ * plausible looking one. If the format changes, this page breaks at the build
+ * rather than quietly documenting a format nothing issues any more.
  */
 export function LandingPage() {
   const rootRef = useReveal()
@@ -87,20 +88,21 @@ export function LandingPage() {
           </p>
           <Specimen />
           <div className="doc-facts doc-facts--3">
+            <Fact term="Readable">
+              <b>HI-26INA</b> reads as registered in 2026, in India, in Ayurveda. Four of the
+              fourteen characters carry meaning, which is what lets a support agent recognise a
+              wrong ID without a database behind them.
+            </Fact>
             <Fact term="Entropy">
-              Nine random characters is 45 bits, about <b>3.5 × 10¹³</b> identifiers. The rejected
-              six character form was 32⁶, roughly 1.07 billion, which a scraper at a thousand
-              requests a second walks a meaningful fraction of.
+              Five random characters from A-Z and 0-9 is <b>60,466,176</b> per year, country and
+              system. That space is per prefix, not global, which is the number that matters: two
+              practitioners registered in the same year, country and system draw from one bucket.
             </Fact>
-            <Fact term="Alphabet">
-              Crockford base32, which omits <b>I, L, O and U</b>, so the classic transcription
-              errors cannot occur. Decoding is case insensitive and forgiving: I and L read as 1, O
-              reads as 0.
-            </Fact>
-            <Fact term="Check character">
-              <b>Luhn mod 32</b> over the same alphabet, not Crockford's own mod 37 symbol whose set
-              includes * ~ $ = and U. Those read as corruption on a printed certificate. This
-              catches every single character error and almost every adjacent transposition.
+            <Fact term="What that cost">
+              The earlier format spent those characters on entropy instead and carried a check
+              character, so a typo was caught in the browser. This one cannot do that. A mistyped
+              ID now reaches the server and comes back <b>not verified</b> rather than "you
+              mistyped that", and the rate limiter carries more of the load than it did.
             </Fact>
             <Fact term="Permanence">
               Issued on the <b>first</b> transition into APPROVED and never reissued. A practitioner
@@ -355,12 +357,14 @@ export function LandingPage() {
           <pre className="doc-pre">
             <code>
               {'{\n'}
-              {'  '}<b>"immortalId"</b>: <em>"{buildImmortalId('K3M7Q8XT2')}"</em>,{'\n'}
+              {'  '}<b>"immortalId"</b>: <em>"{buildImmortalId(2026, 'IN', 'A', 'K3M7Q')}"</em>,{'\n'}
               {'  '}<b>"displayName"</b>: <em>"A. Sharma"</em>,{'\n'}
               {'  '}<b>"status"</b>: <em>"VERIFIED"</em>,{'\n'}
               {'  '}<b>"verifiedAsOf"</b>: <em>"2026-07-14"</em>,{'\n'}
               {'  '}<b>"registrySourceBatch"</b>: <em>"council-2026-07-14"</em>,{'\n'}
-              {'  '}<b>"council"</b>: <em>"MH"</em>{'\n'}
+              {'  '}<b>"council"</b>: <em>"MH"</em>,{'\n'}
+              {'  '}<b>"country"</b>: <em>"India"</em>,{'\n'}
+              {'  '}<b>"medicalSystem"</b>: <em>"Ayurveda"</em>{'\n'}
               {'}'}
             </code>
           </pre>
@@ -557,16 +561,20 @@ function Fact({ term, children }: { term: string; children: React.ReactNode }) {
 }
 
 /**
- * The identifier, drawn as its own anatomy. The check character is computed by
- * the same function the client uses to validate input, so the specimen on this
- * page is a genuinely valid ID rather than a plausible looking string.
+ * The identifier, drawn as its own anatomy.
+ *
+ * Built through the same function that validates input, so the specimen on this
+ * page is a genuinely valid ID rather than a plausible looking string. If the
+ * format ever changes again and this page is not updated, the build breaks here
+ * rather than shipping a marketing page that documents a format the system no
+ * longer issues.
  */
 function Specimen() {
-  const id = buildImmortalId('K3M7Q8XT2')
-  const [prefix, first, second] = id.split('-')
-  const body = `${first}${second}`
-  const random = body.slice(0, 9)
-  const check = body.slice(9)
+  const id = buildImmortalId(2026, 'IN', 'A', 'K3M7Q')
+  const [prefix, meaning, random] = id.split('-')
+  const year = (meaning ?? '').slice(0, 2)
+  const country = (meaning ?? '').slice(2, 4)
+  const system = (meaning ?? '').slice(4)
 
   return (
     <div className="doc-specimen">
@@ -582,22 +590,27 @@ function Specimen() {
           -
         </span>
         <div className="doc-glyphs" aria-hidden="true">
-          {[...random.slice(0, 5)].map((char, i) => (
-            <span className="doc-glyph" key={`a${i}`}>
+          {[...year].map((char, i) => (
+            <span className="doc-glyph doc-glyph--check" key={`y${i}`}>
               {char}
             </span>
           ))}
+          {[...country].map((char, i) => (
+            <span className="doc-glyph doc-glyph--check" key={`c${i}`}>
+              {char}
+            </span>
+          ))}
+          <span className="doc-glyph doc-glyph--check">{system}</span>
         </div>
         <span className="doc-specimen__sep" aria-hidden="true">
           -
         </span>
         <div className="doc-glyphs" aria-hidden="true">
-          {[...random.slice(5)].map((char, i) => (
-            <span className="doc-glyph" key={`b${i}`}>
+          {[...(random ?? '')].map((char, i) => (
+            <span className="doc-glyph" key={`r${i}`}>
               {char}
             </span>
           ))}
-          <span className="doc-glyph doc-glyph--check">{check}</span>
         </div>
       </div>
       <div className="doc-specimen__legend">
@@ -606,12 +619,15 @@ function Specimen() {
           Fixed. Makes the identifier recognisable in a log line or a support ticket.
         </div>
         <div>
-          <b>Nine random characters</b>
-          Grouped five and five so it reads aloud in two chunks, like an airline record locator.
+          <b>Year, country, system</b>
+          26 IN A reads as registered in 2026, in India, in Ayurveda. Set once at issue and never
+          recomputed, so the identifier still decodes to what was true the day it was made.
         </div>
         <div>
-          <b>Check character</b>
-          Validated in the browser before the request is ever sent, then again by the server.
+          <b>Five random characters</b>
+          A-Z and 0-9, which is 60,466,176 per year, country and system. Checked against the
+          register before it is written, and unique at the database level so the generator is never
+          the only thing standing between two people and one identifier.
         </div>
       </div>
     </div>

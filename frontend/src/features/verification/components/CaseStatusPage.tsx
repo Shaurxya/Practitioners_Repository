@@ -1,5 +1,6 @@
 import { Link, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
+import { ImmortalIdDisplay } from '@/components/ui/ImmortalIdDisplay'
 import { DetailRow, Panel } from '@/components/ui/Panel'
 import { ErrorState, LoadingPanel, Skeleton, errorCopy } from '@/components/ui/States'
 import { formatDate } from '@/lib/formatters'
@@ -7,6 +8,7 @@ import { cn } from '@/lib/cn'
 import { useVerificationCase } from '../hooks/useVerificationCase'
 import { outcomeCopy } from '../outcome'
 import { councilLabel, useCouncils } from '../councils'
+import { countryName, medicalSystemName, useCountries, useMedicalSystems } from '../referenceData'
 import { ProgressTracker } from './ProgressTracker'
 import type { OutcomeCopy } from '../outcome'
 
@@ -22,6 +24,8 @@ export function CaseStatusPage() {
   const query = useVerificationCase(caseId)
   // Falls back to the code, so the panel never waits on reference data.
   const councils = useCouncils()
+  const countries = useCountries()
+  const systems = useMedicalSystems()
 
   if (query.isPending) {
     return (
@@ -92,14 +96,13 @@ export function CaseStatusPage() {
 
       {isVerified && (
         <Panel title="Immortal ID">
-          {detail.immortalId ? (
-            <p className="font-mono text-lg tracking-wider text-content">{detail.immortalId}</p>
-          ) : (
-            // Marked placeholder, not an empty field and not a fake value.
-            <p className="text-base text-content-muted">
-              Not yet issued. Your permanent ID will appear here and will not change afterwards.
-            </p>
-          )}
+          <ImmortalIdDisplay
+            immortalId={detail.immortalId}
+            size="lg"
+            showParts
+            copyable
+            placeholder="Not yet issued. Your permanent ID will appear here and will not change afterwards."
+          />
         </Panel>
       )}
 
@@ -115,6 +118,15 @@ export function CaseStatusPage() {
             value={<span className="font-mono tabular-nums">{detail.claim.registrationNumber}</span>}
           />
           <DetailRow label="Council" value={councilLabel(detail.claim.council, councils.data)} />
+          {detail.claim.country && (
+            <DetailRow label="Country" value={countryName(detail.claim.country, countries.data)} />
+          )}
+          {detail.claim.medicalSystem && (
+            <DetailRow
+              label="System of medicine"
+              value={medicalSystemName(detail.claim.medicalSystem, systems.data)}
+            />
+          )}
           <DetailRow label="Specialty" value={detail.claim.specialty} />
           <DetailRow label="Submitted" value={formatDate(detail.submittedAt)} />
         </dl>

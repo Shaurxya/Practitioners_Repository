@@ -1,20 +1,21 @@
 import type { FormEvent } from 'react'
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { TextField } from '@/components/ui/Field'
-import { setAccessToken } from '@/lib/authToken'
-import { fetchCurrentUser, login } from '../api/authApi'
+import { acceptSession, login } from '../api/authApi'
+import { ME_QUERY_KEY } from '../hooks/useCurrentUser'
+import { safeNextPath } from './safeNext'
 
 /**
- * The form only. Real authentication lands in phase 8, and this deliberately
- * does not pretend otherwise: there is no route guard behind it yet.
+ * Sign in.
  *
- * One rule already applied: a failed login says the same thing whether the
- * email exists or not. The server side of that has a matching obligation, and a
- * harder one, since skipping the password hash for an unknown email leaks
- * existence through response timing even when the words are identical.
+ * One rule visible here and enforced on both sides: a failed sign in says the
+ * same thing whether the email exists or not. The server has the harder half of
+ * that obligation and meets it, since skipping the password hash for an unknown
+ * email would leak existence through response timing even with identical words.
+ * See AuthService.decoyHash.
  */
 export function LoginPage() {
   const navigate = useNavigate()
@@ -25,16 +26,13 @@ export function LoginPage() {
   const [formError, setFormError] = useState<string | null>(null)
 
   /**
-   * Where to go after signing in. RequireAdmin puts the screen you asked for
-   * here, so a bookmarked console URL survives the round trip through login.
+   * Where to go after signing in. The guards put the screen you asked for here,
+   * so a bookmarked console URL survives the round trip through sign in.
    *
-   * Only same origin paths are honoured. An unvalidated `next` is an open
-   * redirect: a link to our own login page carrying next=https://evil.example
-   * would send someone who trusts this domain somewhere else, having just typed
-   * their password.
+   * Validated in safeNext, shared with the sign up page: an unvalidated `next`
+   * is an open redirect.
    */
-  const next = params.get('next') ?? ''
-  const requested = next.startsWith('/') && !next.startsWith('//') ? next : null
+  const requested = safeNextPath(params.get('next'))
 
   const mutation = useMutation({
     mutationFn: login,
@@ -43,26 +41,22 @@ export function LoginPage() {
      *
      * Sending everyone to "/" put an admin on the public marketing page with no
      * sign they were signed in and no route to the console, which is
-     * indistinguishable from the login having failed. So the role decides:
-     * fetched here rather than read from the token, because the token is opaque
-     * to the client and the server is the only thing allowed to say what an
-     * account may do.
+     * indistinguishable from the sign in having failed. So the role decides,
+     * and the role comes from the server rather than from anything the client
+     * decoded: the token is opaque here on purpose.
      *
      * A requested path still wins. That is the bookmarked console URL surviving
-     * the round trip through RequireAdmin, and it is already validated as same
-     * origin above.
+     * the round trip through a guard, already validated as same origin.
      *
-     * fetchQuery rather than a bare call, so the result is seeded into the same
-     * ['me'] cache RequireAdmin reads. Without that the guard refetches on
-     * arrival and the console flashes its loading state for no reason.
+     * The account arrives with the tokens now, so this seeds the ['me'] cache
+     * directly instead of fetching it. That removes a round trip from every
+     * sign in, and removes the loading flash the guards used to show on arrival.
      */
-    onSuccess: async (auth) => {
-      setAccessToken(auth.accessToken)
-      const user = await queryClient.fetchQuery({
-        queryKey: ['me'],
-        queryFn: fetchCurrentUser,
-      })
-      void navigate(requested ?? (user.role === 'ADMIN' ? '/admin' : '/cases'))
+    onSuccess: (auth) => {
+      acceptSession(auth)
+      queryClient.setQueryData(ME_QUERY_KEY, auth.user)
+      const canReview = auth.user.role === 'ADMIN' || auth.user.role === 'REVIEWER'
+      void navigate(requested ?? (canReview ? '/admin' : '/cases'))
     },
     onError: () => {
       setFormError('That email and password do not match an account.')
@@ -123,6 +117,16 @@ export function LoginPage() {
           {mutation.isPending ? 'Signing in' : 'Sign in'}
         </Button>
       </form>
+
+      <p className="text-body-sm text-content-muted">
+        No account yet?{' '}
+        <Link
+          to={requested ? `/signup?next=${encodeURIComponent(requested)}` : '/signup'}
+          className="underline decoration-border-strong underline-offset-4"
+        >
+          Create one
+        </Link>
+      </p>
     </div>
   )
 }

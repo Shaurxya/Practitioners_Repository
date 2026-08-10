@@ -22,12 +22,18 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    port: Number(process.env['VITE_DEV_PORT'] ?? 5173),
     // Dev only. The browser calls /api/... on the Vite origin and Vite forwards
     // it to Spring Boot, so there is no CORS setup to get wrong locally.
+    //
+    // The port is read from the environment rather than fixed at 8080, because
+    // SERVER_PORT already moves Spring and a hardcoded target here turns that
+    // into a silent failure: unmocked requests fall through to whatever else
+    // happens to own 8080, get an HTML page back, and surface as a select box
+    // stuck on "Loading" with a 200 in the network tab.
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        target: `http://localhost:${process.env['SERVER_PORT'] ?? 8080}`,
         changeOrigin: true,
       },
     },

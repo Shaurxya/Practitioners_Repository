@@ -15,7 +15,15 @@ import type { PractitionerCaseDetail } from '@/features/verification/types'
  * purpose. Fixtures that are tidier than the real data hide the bugs the real
  * data will cause.
  */
-export const VERIFIED_IMMORTAL_ID = buildImmortalId('K3M7Q8XT2')
+/**
+ * A fixed ID rather than a generated one. Tests assert on it, and a fixture
+ * that changes per run turns a real failure into an unreproducible one.
+ *
+ * 2026, India, Ayurveda. It matches the claim below, which matters: an ID whose
+ * segments contradicted the case it belongs to would model a bug rather than the
+ * system.
+ */
+export const VERIFIED_IMMORTAL_ID = buildImmortalId(2026, 'IN', 'A', 'K3M7Q')
 
 function candidate(overrides: Partial<MatchCandidate> = {}): MatchCandidate {
   return {
@@ -43,11 +51,14 @@ export const REVIEW_CASES: ReviewCaseDetail[] = [
     decidedAt: null,
     decidedBy: null,
     decisionReason: null,
+    immortalId: null,
     claim: {
       fullName: 'Dr. Anita Sharma',
       registrationNumber: 'mh 28409',
       council: 'MH',
       specialty: 'Panchakarma',
+      country: 'IN',
+      medicalSystem: 'A',
       normalizedName: 'ANITA SHARMA',
       normalizedRegistrationNumber: 'MH28409',
     },
@@ -83,11 +94,14 @@ export const REVIEW_CASES: ReviewCaseDetail[] = [
     decidedAt: null,
     decidedBy: null,
     decisionReason: null,
+    immortalId: null,
     claim: {
       fullName: 'Rajesh Kumar B.A.M.S.',
       registrationNumber: 'KL-99999',
       council: 'KL',
-      specialty: 'Ayurveda',
+      specialty: 'Other',
+      country: 'IN',
+      medicalSystem: 'U',
       normalizedName: 'RAJESH KUMAR',
       normalizedRegistrationNumber: 'KL99999',
     },
@@ -105,11 +119,14 @@ export const REVIEW_CASES: ReviewCaseDetail[] = [
     decidedAt: null,
     decidedBy: null,
     decisionReason: null,
+    immortalId: null,
     claim: {
       fullName: 'Deepa Trivedi',
       registrationNumber: 'KA35652',
       council: 'KA',
       specialty: 'Kayachikitsa',
+      country: 'IN',
+      medicalSystem: 'A',
       normalizedName: 'DEEPA TRIVEDI',
       normalizedRegistrationNumber: 'KA35652',
     },
@@ -163,6 +180,8 @@ export const PRACTITIONER_CASES: PractitionerCaseDetail[] = [
       registrationNumber: 'MH-28409',
       council: 'MH',
       specialty: 'Panchakarma',
+      country: 'IN',
+      medicalSystem: 'A',
     },
     progress: [
       { step: 'SUBMITTED', state: 'DONE' },

@@ -14,7 +14,7 @@ This file records the decisions the generated document cannot express.
 | Base path | `/api/v1`, version in the path, never in a header |
 | Casing | `camelCase` in JSON both directions |
 | Timestamps | ISO-8601 UTC strings, never epoch numbers |
-| IDs | UUID v4 in path segments, except the Immortal ID which is `HI-XXXXX-XXXXX` |
+| IDs | UUID v4 in path segments, except the Immortal ID which is `HI-YYCCM-RRRRR` |
 | Lists | Spring `Page<T>`: `content`, `totalElements`, `totalPages`, `number`, `size` |
 | Paging params | `?page=0&size=20&sort=submittedAt,desc` |
 | Errors | Always `ErrorResponse`: `code`, `message`, `fieldErrors`, `timestamp` |

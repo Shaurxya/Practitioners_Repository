@@ -22,6 +22,12 @@ import { apiRequest } from '@/lib/apiClient'
 export interface Council {
   code: string
   canonicalName: string
+  /**
+   * The country this body registers in, and the authority for the CC segment of
+   * an Immortal ID. Served rather than inferred, so a council in a second
+   * country is a migration and not a client change.
+   */
+  countryCode: string
 }
 
 export function fetchCouncils(): Promise<Council[]> {
@@ -37,11 +43,25 @@ export function useCouncils() {
   })
 }
 
-/** Select options, sorted by the name a person reads rather than by code. */
-export function councilOptions(councils: Council[] | undefined) {
+/**
+ * Select options, sorted by the name a person reads rather than by code.
+ *
+ * Narrowed to one country when given one. The claim form asks for a country
+ * first so the council list is a page of plausible answers rather than every
+ * body in every register, but the narrowing is a convenience: the server checks
+ * the council against the country regardless, because the council is the
+ * authority and the browser is not.
+ */
+export function councilOptions(councils: Council[] | undefined, countryCode?: string) {
   return (councils ?? [])
+    .filter((c) => !countryCode || c.countryCode === countryCode)
     .map((c) => ({ value: c.code, label: c.canonicalName }))
     .sort((a, b) => a.label.localeCompare(b.label))
+}
+
+/** The country a council registers in, or undefined while the list is loading. */
+export function councilCountry(code: string, councils: Council[] | undefined) {
+  return councils?.find((c) => c.code === code)?.countryCode
 }
 
 /**
@@ -78,13 +98,25 @@ export function looksLikeRegistrationNumber(value: string): boolean {
   return (cleaned.match(/\d/g) ?? []).length >= 4
 }
 
+/**
+ * Branches within a system of medicine, not systems themselves.
+ *
+ * "Ayurveda" and "Unani" used to sit in this list. They are gone because they
+ * are now the answer to a different question: the system of medicine is its own
+ * field, it is one of five, and it is written permanently into the Immortal ID
+ * as the M segment. Leaving them here would have offered the same fact in two
+ * places on one form with no way to reconcile a contradiction, and only one of
+ * the two would have reached the identifier.
+ *
+ * Kayachikitsa, Panchakarma, Rasashastra, Shalya Tantra and Prasuti Tantra are
+ * all Ayurvedic branches. Siddha, Yoga and Traditional Chinese Medicine
+ * practitioners answer "Other" until this list is written for their systems too.
+ */
 export const SPECIALTIES = [
   'Kayachikitsa',
   'Panchakarma',
   'Rasashastra',
   'Shalya Tantra',
   'Prasuti Tantra',
-  'Ayurveda',
-  'Unani',
   'Other',
 ] as const

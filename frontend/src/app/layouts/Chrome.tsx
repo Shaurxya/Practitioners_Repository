@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react'
-import { NavLink, Link, useNavigate } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
-import { useCurrentUser } from '@/features/auth/hooks/useCurrentUser'
-import { clearAccessToken } from '@/lib/authToken'
+import { NavLink, Link } from 'react-router-dom'
+import { useIsAuthenticated, useSignOut } from '@/features/auth/hooks/useCurrentUser'
 
 /**
  * The header and footer every route shares.
@@ -57,36 +55,42 @@ const CONSOLE_NAV: Item[] = [
  * RequireAdmin. An admin arriving at the public site had no way in.
  */
 function AccountNav({ isConsole }: { isConsole: boolean }) {
-  const user = useCurrentUser()
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
+  const { isAuthenticated, isResolving, user } = useIsAuthenticated()
+  const signOut = useSignOut()
 
-  function signOut() {
-    clearAccessToken()
-    // Removed rather than invalidated: invalidating refetches, and refetching
-    // /me without a token is a guaranteed 401 that briefly renders as an error
-    // instead of as a signed out header.
-    queryClient.removeQueries({ queryKey: ['me'] })
-    void navigate('/')
-  }
+  // Only while a session is actually being resolved. Rendering nothing for a
+  // signed out visitor would leave the public site with no way in at all, which
+  // is what happened before /login was linked from anywhere.
+  if (isResolving) return null
 
-  if (user.isPending) return null
-
-  if (!user.data) {
+  if (!isAuthenticated || !user) {
     return (
-      <NavLink to="/login" className="is-primary">
-        Sign in
-      </NavLink>
+      <>
+        <NavLink to="/login" data-secondary>
+          Sign in
+        </NavLink>
+        <NavLink to="/signup" className="is-primary">
+          Sign up
+        </NavLink>
+      </>
     )
   }
+
+  const canReview = user.role === 'ADMIN' || user.role === 'REVIEWER'
 
   return (
     <>
       {/* Not while already in the console: CONSOLE_NAV's "Public site" is the
           link out, and a Console link inside the console points at the page you
           are on. */}
-      {user.data.role === 'ADMIN' && !isConsole && <NavLink to="/admin">Console</NavLink>}
-      <button type="button" className="masthead__signout" onClick={signOut}>
+      {canReview && !isConsole && <NavLink to="/admin">Console</NavLink>}
+      {!isConsole && <NavLink to="/account">Account</NavLink>}
+      <button
+        type="button"
+        className="masthead__signout"
+        disabled={signOut.isPending}
+        onClick={() => signOut.mutate()}
+      >
         Sign out
       </button>
     </>

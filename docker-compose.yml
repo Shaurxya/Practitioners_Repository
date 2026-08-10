@@ -78,5 +78,61 @@ services:
     environment:
       LOG_LEVEL: ${EXTRACTION_LOG_LEVEL:-INFO}
 
+  # ---------------------------------------------------------------------------
+  # Object storage for identity documents
+  #
+  # MinIO speaks the S3 API, so the same code runs here and against real S3 with
+  # nothing but an endpoint change. Section 2 names it, and this is the phase
+  # that finally needs it.
+  #
+  # What lands in this bucket is the most sensitive data the system holds: a
+  # government photo ID and a selfie. Two consequences visible in this file.
+  #
+  # Bound to loopback, like the extraction sidecar. Nothing outside this machine
+  # has any business reaching it, and the console port is where an unauthicated
+  # browse of the whole bucket would come from.
+  #
+  # The objects are encrypted BEFORE they arrive, by DocumentCipher, with a key
+  # per document that MinIO never sees. So a stolen volume is ciphertext, and
+  # deleting one person's key destroys their images while leaving the audit
+  # trail intact. That is the crypto shredding non negotiable 1 and section 10
+  # need in order to coexist.
+  # ---------------------------------------------------------------------------
+  minio:
+    # Pinned by digest rather than by tag. MinIO's release tags are timestamps
+    # that move faster than this project will, and "latest" would mean the
+    # storage layer under a government ID changes version on whichever day
+    # somebody happens to rebuild. A digest is the only reference that cannot
+    # silently become a different image.
+    image: minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    container_name: verification-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+
+    environment:
+      # First start only, same as Postgres above. These are the storage
+      # credentials Spring authenticates with, not anything a user sees.
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-verification}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-verification-minio}
+
+    ports:
+      # API and console, both loopback only. Publishing 9001 to the network
+      # would put a full object browser on the LAN.
+      - "127.0.0.1:${MINIO_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+
+    volumes:
+      - minio-data:/data
+
+    healthcheck:
+      # "Container started" and "MinIO is ready to serve" are different moments.
+      # Spring creates the bucket at startup and needs the second one.
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
 volumes:
   postgres-data:
+  minio-data:

@@ -18,4 +18,16 @@ public interface VerificationCaseRepository extends JpaRepository<VerificationCa
             UUID practitionerId, List<String> terminalStatuses);
 
     List<VerificationCase> findAllByOrderBySubmittedAtDesc();
+
+    /**
+     * One person's own claims.
+     *
+     * <p>This method replaced {@code findAllByOrderBySubmittedAtDesc} on the
+     * practitioner facing endpoint, and the difference was a real disclosure:
+     * {@code GET /api/v1/verifications} returned every case in the database to
+     * every caller, including claimed names and registration numbers belonging
+     * to other people. Filtering in the query rather than after it matters too,
+     * so a page of results is a page of the caller's results.
+     */
+    List<VerificationCase> findBySubmittedByUserIdOrderBySubmittedAtDesc(UUID userId);
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { renderWithProviders } from '@/test/utils'
 import { server } from '@/mocks/server'
@@ -26,6 +26,42 @@ describe('CaseStatusPage', () => {
   it('shows the Immortal ID once issued', async () => {
     renderCase(approved.caseId)
     expect(await screen.findByText(VERIFIED_IMMORTAL_ID)).toBeInTheDocument()
+  })
+
+  /**
+   * The four fixed characters are the entire reason this format spends them on
+   * meaning rather than entropy. Rendering HI-26INA-K3M7Q as an opaque string
+   * buys nothing and costs a check character, so the decoded caption is part of
+   * the contract, not decoration.
+   */
+  it('decodes the ID rather than printing it as an opaque string', async () => {
+    renderCase(approved.caseId)
+    await screen.findByText(VERIFIED_IMMORTAL_ID)
+
+    // Scoped to the ID panel. "India" also appears under what was submitted,
+    // and an unscoped query would pass on that one while the caption was
+    // missing entirely, which is exactly the regression this guards against.
+    const panel = screen.getByText(VERIFIED_IMMORTAL_ID).closest('section') as HTMLElement
+    expect(within(panel).getByText('2026')).toBeInTheDocument()
+    expect(within(panel).getByText('India')).toBeInTheDocument()
+    expect(within(panel).getByText('Ayurveda')).toBeInTheDocument()
+  })
+
+  /**
+   * A legacy ID carries no year, country or system. Saying so is the honest
+   * answer; a caption of guessed values would be worse than none, because the
+   * whole point of the fixed segments is that they can be trusted.
+   */
+  it('says an ID predates the format rather than inventing segments for it', async () => {
+    server.use(
+      http.get('/api/v1/verifications/:caseId', () =>
+        HttpResponse.json({ ...approved, immortalId: 'HI-K3M7Q-8XT2P' }),
+      ),
+    )
+    renderCase(approved.caseId)
+
+    expect(await screen.findByText('HI-K3M7Q-8XT2P')).toBeInTheDocument()
+    expect(screen.getByText(/earlier ID format/)).toBeInTheDocument()
   })
 
   it('shows a marked placeholder when no Immortal ID has been issued yet', async () => {

@@ -1,10 +1,12 @@
 package com.herbimmortal.verification.controller;
 
 import com.herbimmortal.verification.domain.VerificationCase;
+import com.herbimmortal.verification.security.UserPrincipal;
+import com.herbimmortal.verification.service.RegistryLookupService;
 import com.herbimmortal.verification.service.VerificationService;
-import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,24 +24,73 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api/v1/verifications")
-@Profile("!prod")
 public class VerificationController {
 
     private final VerificationService verification;
+    private final RegistryLookupService lookup;
 
-    public VerificationController(VerificationService verification) {
+    public VerificationController(VerificationService verification, RegistryLookupService lookup) {
         this.verification = verification;
+        this.lookup = lookup;
     }
 
+    public record LookupRequest(String council, String registrationNumber) {
+    }
+
+    /**
+     * Step 1 of the claim wizard: does the register hold this registration.
+     *
+     * <p>POST rather than GET, and it is not an oversight. A registration number
+     * in a query string ends up in the browser history, the access log, the
+     * referrer header of any outbound link on the page, and every proxy in
+     * between. The body keeps it out of all four. The resource being created is
+     * the audit event.
+     *
+     * <p>Signed in, budgeted and audited, all three enforced in
+     * {@code RegistryLookupService}. Without them this endpoint is the lookup
+     * oracle the class comment above warns about, just with a friendlier
+     * response body.
+     *
+     * <p>Nothing here is remembered. No case is created, and the record this
+     * found is not carried to submit: {@code uq_practitioner_open_case} allows
+     * one open case per practitioner, so a draft made here and abandoned would
+     * lock that person out permanently.
+     */
+    @PostMapping("/lookup")
+    public RegistryLookupService.LookupResult lookup(@RequestBody LookupRequest body,
+                                                     @AuthenticationPrincipal UserPrincipal caller) {
+        return lookup.lookup(body.council(), body.registrationNumber(), caller.id());
+    }
+
+    /**
+     * country and medicalSystem are new in V9 and both feed the Immortal ID.
+     *
+     * country is checked against the council rather than trusted: the council
+     * knows which country it registers in, and a claim whose two answers
+     * disagree is rejected instead of silently resolved.
+     */
+    /**
+     * photoIdDocumentId and selfieDocumentId are the persona verification step.
+     *
+     * <p>Both are optional at this layer and that is deliberate. The portal
+     * always sends them, but the scheduled re-verification job re-checks an
+     * approved practitioner against a fresh registry batch with nobody at a
+     * keyboard, so it has no new images to offer. Rejecting a claim without
+     * them here would make that job impossible; instead IDENTITY_DOCUMENTS
+     * returns REVIEW and a person looks, which is non negotiable 8.
+     */
     public record SubmitRequest(String fullName, String registrationNumber, String council,
-                                String specialty) {
+                                String specialty, String country, String medicalSystem,
+                                UUID photoIdDocumentId, UUID selfieDocumentId) {
     }
 
     @PostMapping
-    public ResponseEntity<?> submit(@RequestBody SubmitRequest body) {
+    public ResponseEntity<?> submit(@RequestBody SubmitRequest body,
+                                    @AuthenticationPrincipal UserPrincipal caller) {
         try {
             VerificationCase created = verification.submit(body.fullName(), body.registrationNumber(),
-                    body.council(), body.specialty());
+                    body.council(), body.specialty(), body.country(), body.medicalSystem(),
+                    caller.id(), body.photoIdDocumentId(), body.selfieDocumentId());
             // 202: accepted. The decision is already made because matching is an
             // indexed lookup, but the contract stays 202 so the portal keeps
             // polling and an asynchronous version needs no client change.
@@ -52,14 +103,28 @@ public class VerificationController {
         }
     }
 
+    /**
+     * Someone else's case answers 404, not 403. See
+     * {@code VerificationService.requireVisibleTo}: the difference between the
+     * two status codes is an oracle for which case ids exist.
+     */
     @GetMapping("/{caseId}")
-    public CaseView get(@PathVariable UUID caseId) {
-        return view(verification.require(caseId));
+    public CaseView get(@PathVariable UUID caseId, @AuthenticationPrincipal UserPrincipal caller) {
+        return view(verification.requireVisibleTo(caseId, caller.id(), caller.role().canReview()));
     }
 
+    /**
+     * The caller's own claims.
+     *
+     * <p>This used to call {@code verification.all()}, which returned every case
+     * in the database to every caller: other people's claimed names,
+     * registration numbers and councils, on an endpoint any browser could hit.
+     * The filter belongs in the query rather than after it, so a page of
+     * results is a page of this person's results.
+     */
     @GetMapping
-    public List<CaseView> mine() {
-        return verification.all().stream().map(this::view).toList();
+    public List<CaseView> mine(@AuthenticationPrincipal UserPrincipal caller) {
+        return verification.mine(caller.id()).stream().map(this::view).toList();
     }
 
     private CaseView view(VerificationCase c) {
@@ -78,7 +143,8 @@ public class VerificationController {
                 c.getSubmittedAt().toString(),
                 c.getDecidedAt() == null ? null : c.getDecidedAt().toString(),
                 new Claim(c.getClaimedFullName(), c.getClaimedRegistrationNumber(),
-                        c.getClaimedCouncil(), c.getClaimedSpecialty()),
+                        c.getClaimedCouncil(), c.getClaimedSpecialty(),
+                        c.getClaimedCountry(), c.getClaimedMedicalSystem()),
                 List.of(
                         new Step("SUBMITTED", "DONE"),
                         new Step("CHECKING", "DONE"),
@@ -90,7 +156,8 @@ public class VerificationController {
                 approved ? practitioner.getImmortalId() : null);
     }
 
-    public record Claim(String fullName, String registrationNumber, String council, String specialty) {
+    public record Claim(String fullName, String registrationNumber, String council, String specialty,
+                        String country, String medicalSystem) {
     }
 
     public record Step(String step, String state) {

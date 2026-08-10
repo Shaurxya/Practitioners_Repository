@@ -63,11 +63,21 @@ export interface ReviewCaseDetail {
   decidedAt: string | null
   decidedBy: string | null
   decisionReason: string | null
+  /**
+   * The identifier this practitioner already holds, null until a first
+   * approval. A reviewer looking at a second case for someone already verified
+   * needs to see that, and the console is where a support ticket quoting an
+   * Immortal ID gets answered.
+   */
+  immortalId: string | null
   claim: {
     fullName: string
     registrationNumber: string
     council: string
     specialty: string
+    /** Empty on cases submitted before the ID format started carrying them. */
+    country: string
+    medicalSystem: string
     normalizedName: string
     normalizedRegistrationNumber: string
   }

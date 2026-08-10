@@ -1,7 +1,7 @@
 package com.herbimmortal.verification.controller;
 
 import com.herbimmortal.verification.service.PromoteService;
-import org.springframework.context.annotation.Profile;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,7 +29,7 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api/v1/admin")
-@Profile("!prod")
+@PreAuthorize("hasAnyRole('REVIEWER','ADMIN')")
 public class RegistryController {
 
     private final JdbcTemplate jdbc;

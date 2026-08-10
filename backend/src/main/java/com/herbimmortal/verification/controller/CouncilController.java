@@ -22,13 +22,20 @@ public class CouncilController {
         this.councils = councils;
     }
 
-    public record CouncilView(String code, String canonicalName) {
+    /**
+     * countryCode is here so the claim form can narrow the council list to the
+     * country the practitioner picked. Serving it rather than shipping a lookup
+     * table in the bundle is the same lesson V2 records for councils
+     * themselves: a client side copy of server data goes stale invisibly,
+     * because nothing in the client is wrong, it is just old.
+     */
+    public record CouncilView(String code, String canonicalName, String countryCode) {
     }
 
     @GetMapping({"/api/v1/councils", "/api/v1/admin/councils"})
     public List<CouncilView> list() {
         return councils.findAllByOrderByCanonicalNameAsc().stream()
-                .map(c -> new CouncilView(c.getCode(), c.getCanonicalName()))
+                .map(c -> new CouncilView(c.getCode(), c.getCanonicalName(), c.getCountryCode()))
                 .toList();
     }
 }

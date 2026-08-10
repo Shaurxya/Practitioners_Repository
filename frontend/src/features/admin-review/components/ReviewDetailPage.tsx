@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { TextAreaField } from '@/components/ui/Field'
+import { ImmortalIdDisplay } from '@/components/ui/ImmortalIdDisplay'
 import { Panel } from '@/components/ui/Panel'
 import { OutcomeBadge, StatusBadge } from '@/components/ui/StatusBadge'
 import { ErrorState, LoadingPanel, errorCopy } from '@/components/ui/States'
@@ -139,6 +140,12 @@ export function ReviewDetailPage() {
             Case {detail.caseId.slice(0, 8)}
           </span>
           <StatusBadge status={detail.status} />
+          {/* Already verified, on an earlier case. A reviewer needs to see that
+              before deciding this one, and it is what a support ticket quoting
+              an Immortal ID gets answered from. */}
+          {detail.immortalId && (
+            <ImmortalIdDisplay immortalId={detail.immortalId} size="sm" copyable />
+          )}
         </div>
         <span className="text-2xs text-content-subtle">
           submitted {formatDateTime(detail.submittedAt)}

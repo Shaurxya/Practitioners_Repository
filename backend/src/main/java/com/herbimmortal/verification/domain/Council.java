@@ -23,9 +23,22 @@ public class Council {
     @Column(name = "canonical_name", nullable = false)
     private String canonicalName;
 
+    /**
+     * The country this body registers in, and the authority for the CC segment
+     * of an Immortal ID.
+     *
+     * The claim form asks the practitioner to pick a country, but the answer
+     * only narrows the council list: a council is in a country whether or not
+     * the form agrees. When the two disagree the server rejects the claim rather
+     * than quietly preferring one, because either answer could be the mistake.
+     */
+    @Column(name = "country_code", nullable = false)
+    private String countryCode;
+
     protected Council() {
     }
 
     public String getCode() { return code; }
     public String getCanonicalName() { return canonicalName; }
+    public String getCountryCode() { return countryCode; }
 }

@@ -88,17 +88,52 @@ erDiagram
     AUDIT_EVENT }o--|| PRACTITIONER : "subject or actor"
 ```
 
+### 3.0 User
+
+The **login**, added in phase 8 (V10). Email (stored lowercased, unique),
+BCrypt password hash, role, status, lockout counter.
+
+Deliberately **not** the same table as Practitioner, and neither owns the other:
+
+- a user may hold no registration at all (a reviewer, an admin, or someone who
+  signed up and has not claimed yet)
+- a registration exists whether or not anyone ever logs in for it, because 3.1
+  keys it on `(council, licence)` and the registry is external
+
+So the link is a nullable `practitioners.user_id`. Collapsing the two would mean
+either inventing a login for every row of a council register, or losing the
+registration identity matching depends on.
+
+`verification_cases.submitted_by_user_id` is denormalized from that link on
+purpose: ownership is checked on every case read, and going through
+practitioners would put a join on the hottest authorization path and make
+ownership mutable. Who submitted a claim is a fact about the moment it was
+submitted.
+
 ### 3.1 Practitioner
 
-The account. Holds login credentials, email, role, and `immortal_id`.
+The registration. Holds `immortal_id`, the country and medical system it was
+built from, and a nullable `user_id` pointing at the account that claimed it.
 
 - `immortal_id` is **nullable** until the first approval. Every read path must
   handle a practitioner without one.
+- `user_id` is **nullable** and stays that way. Rows created before accounts
+  existed have no honest owner, and guessing one would attach a stranger's
+  verified identity to somebody's login. First claim wins; a second account
+  claiming the same registration gets a 409, because two accounts on one licence
+  is either a mistake or an impersonation and a person has to look at it.
 - Does **not** hold the claimed license number. A claim belongs to a case,
   because a practitioner can submit a corrected claim after a rejection. The
   original brief put "a claimed identity" on Practitioner, that was wrong.
 - Holds `current_case_id`, a pointer to the case that currently defines this
   practitioner's status. See `D1`.
+- Holds `country_code`, `medical_system_code` and `immortal_id_issued_at`: the
+  three inputs the Immortal ID was built from, stored next to the output they
+  produced. **Not derived at read time.** If a practitioner later corrects their
+  medical system, `HI-26INA-...` still has to decode back to Ayurveda, because
+  that is what was true when it was issued and the ID does not change. Deriving
+  from the council or the latest case would make the ID and its own meaning
+  disagree. See 8.2.
 
 ### 3.2 RegistryRecord
 
@@ -445,17 +480,29 @@ Never a bare boolean. Minimum viable body:
 
 ```json
 {
-  "immortalId": "HI-K3M7Q-8XT2A",
+  "immortalId": "HI-26INA-K3M7Q",
   "displayName": "A. Sharma",
   "status": "VERIFIED",
   "verifiedAsOf": "2026-07-14",
   "registrySourceBatch": "council-2026-07-14",
-  "council": "..."
+  "council": "...",
+  "country": "India",
+  "countryCode": "IN",
+  "medicalSystem": "Ayurveda"
 }
 ```
 
 Non negotiable 4: the UI renders "Verified as of 14 July 2026, source
 council-2026-07-14", not a green tick.
+
+`country` and `medicalSystem` are read from the practitioner record, never
+decoded from the ID in the query string. Decoding would make the caller's own
+input the source of the answer, and a legacy ID carries neither segment.
+
+Every field is present on a `NOT_VERIFIED` answer too, as an empty string. An
+unknown ID and an unverified one have to be byte for byte indistinguishable: a
+field appearing only on the verified branch leaks existence through the response
+*shape*, which is the version of that bug that survives a review of the values.
 
 ### 7.3 Roles
 
@@ -481,37 +528,113 @@ someone else's case ID exists.
    council, because the registry is external data and cannot contain an
    identifier we invented. These two lookups are never interchangeable.
 
-### 8.2 Format, corrected
+### 8.2 Format
 
 ```
-HI-XXXXX-XXXXX
-   \_________/
-    9 random Crockford base32 chars + 1 check char
+HI-YYCCM-RRRRR          HI-26INA-K3M7Q
+   ││││└─ medical system code   A S U Y T
+   ││└┴── ISO 3166-1 alpha-2 country
+   └┴──── last two digits of the registration year
+                  \___/
+                   5 random chars, A-Z and 0-9
 ```
 
-The brief asked for `HI-XXXXXXX`. With 6 random characters plus a check
-character that is 32^6, about 1.07 billion IDs. That is enumerable: a scraper at
-1000 requests per second walks a meaningful fraction of it, so the rate limiter
-becomes the only thing protecting the directory rather than defense in depth.
+| Segment | Source |
+|---|---|
+| `HI` | fixed platform prefix |
+| `YY` | registration year, from the system clock at issuance |
+| `CC` | ISO 3166-1 alpha-2, from `councils.country_code` |
+| `M` | `medical_systems.code`, from the practitioner's selection |
+| `RRRRR` | 5 random characters, `A-Z` and `0-9` |
 
-9 random characters is 45 bits, about 3.5e13. Enumeration is off the table and
-rate limiting goes back to being a second line of defense. Grouped 5 and 5 it
-reads aloud in two chunks, like an airline record locator.
+Capacity is 36^5 = **60,466,176 per (year, country, system) prefix**, not
+globally. That is the number that matters: everyone registered in the same year,
+country and system draws from one bucket.
 
-Crockford base32 is right for the body: no I, L, O, or U, so the classic
-transcription errors cannot occur, and decoding is case insensitive.
+Reference data for `CC` and `M` lives in the `countries` and `medical_systems`
+tables, not in Java enums, for the reason `councils` is a table: adding one is a
+migration, not a redeploy.
 
-**Check character:** Crockford's own specification uses a modulo 37 check symbol
-whose alphabet includes `* ~ $ = U`. Those look like corruption on a printed
-certificate. Use a Luhn mod 32 check character over the standard Crockford
-alphabet instead. It catches every single character error and almost every
-adjacent transposition, and it keeps the ID in one clean character set. The React
-client validates it before the request is sent.
+**Superseded format.** Until V9 this was nine random Crockford base32 characters
+plus a Luhn mod 32 check character, 45 bits. That is worth recording because the
+change was a trade, not an improvement on every axis:
+
+- **Gained**: the identifier is readable. `HI-26INA` decodes to 2026, India,
+  Ayurveda with no database behind it, so a wrong country or a nonsense year is
+  visible on a support ticket rather than discovered by a failed lookup.
+- **Lost**: the check character. It caught every single character error in the
+  browser. Without it a typo reaches the server and comes back "not verified"
+  rather than "you mistyped that", and the rate limiter on the public endpoint
+  carries more of the load than it did.
+
+The client recovers part of that by checking the fixed segments against the
+reference data it already holds: an ID naming a country we hold no register for
+cannot be one we issued. That is the only signal left, and it is weaker than a
+check character. The server validates again regardless.
+
+**Legacy IDs are not rewritten.** 8.1 says permanent and immutable, and a format
+change does not get to suspend that. Both validators keep a `isLegacy` path that
+verifies the old Luhn check character. Shape alone would not do: both formats are
+`HI-XXXXX-XXXXX`, and the check character is the only thing separating them.
+
+**`NOT VALID` did not mean what this section said it meant.** V9 added the format
+`CHECK` as `NOT VALID` on the belief that Postgres would "apply it to every new
+write and leave existing rows alone". The first half is true. The second is not,
+and the gap froze every legacy practitioner.
+
+`NOT VALID` skips the one time backfill scan. It does **not** scope the
+constraint to new rows. A `CHECK` is evaluated against the new row version of
+every `INSERT` *and every* `UPDATE`, so from V9 onward any update touching a
+legacy row failed, including one that never mentioned `immortal_id`:
+
+```
+update practitioners set updated_at = now() where immortal_id = 'HI-B0B2P-6FZVB';
+ERROR: new row for relation "practitioners" violates check constraint
+       "practitioners_immortal_id_format"
+```
+
+Those practitioners could not be claimed by an account, re-verified or revoked.
+Permanent identifier, unusable record. Found by submitting a real claim against
+the Goa register, where the practitioner already existed.
+
+V12 widens the constraint to accept both formats and `VALIDATE`s it. The rule it
+now encodes is `ImmortalId.isIssuable`, not `isValid`, and that is the right
+half of the distinction: a storage constraint is a **reader's** rule and has to
+keep accepting everything already legitimately stored. "Only the current format
+may be issued" is a writer's rule with a different lifetime, and it lives in
+`ImmortalId.prefix`, which builds the fixed segments from reference data and
+throws on anything malformed.
+
+Two things this cost that are worth keeping in mind next time:
+
+- The retry loop in `VerificationService` diagnosed it as a **collision**,
+  because it tested whether any message in the chain contained `immortal_id` and
+  the constraint is named `practitioners_immortal_id_format`. It redrew a suffix
+  three times against a deterministic failure. It now tests SQLSTATE `23505`
+  (unique_violation) rather than `23514` (check_violation).
+- The failure reached the browser as **401 Unauthenticated**. An exception
+  escaping a controller forwards internally to `/error`, that forward re-enters
+  the security filter chain carrying no `Authorization` header, and
+  `anyRequest().authenticated()` caught it. A 500 was unreachable, and since the
+  client keys token refresh off 401, every server fault made every client
+  refresh and retry. `SecurityConfig` now permits the `ERROR` dispatch type.
 
 ### 8.3 Issuance and collisions, the part that will bite
 
 Unique constraint on `practitioners.immortal_id` at the database level.
 Generation retried on collision. Never trust the generator alone.
+
+Two layers, and both are needed:
+
+1. **`ImmortalIdIssuer` asks the table before returning.** It computes the
+   `HI-YYCCM-` prefix once and redraws only the five random characters, up to 12
+   times. Redrawing the fixed four would produce an identifier that lies about
+   the person it belongs to. Exhausting 12 attempts throws
+   `IdSpaceExhaustedException`, which is an ops alert about a saturated prefix,
+   not something to catch and retry.
+2. **The UNIQUE constraint decides.** Two concurrent registrations can both read
+   "free" for the same value, because nothing between the read and the write
+   stops the other one.
 
 The trap: **in Postgres, a unique constraint violation aborts the entire
 transaction.** A retry loop inside the same `@Transactional` method does not
@@ -520,11 +643,17 @@ Hibernate's persistence context is left in an unrecoverable state after a
 `ConstraintViolationException`, so you must not keep using that `EntityManager`
 either.
 
-Correct shape: the retry lives **outside** the transaction boundary. The approval
-method is called again in a fresh transaction on
-`DataIntegrityViolationException`, up to 3 attempts. At 45 bits of entropy and
-100k practitioners, the lifetime probability of ever needing attempt 2 is around
-1e-4, so the retry path is an assertion, not a hot path. It still gets a test.
+Correct shape: the retry lives **outside** the transaction boundary.
+`VerificationService.submit` and `.decide` are deliberately **not**
+`@Transactional`; each is a retry loop around `submitOnce` / `decideOnce`, which
+are. The retried call goes through an injected `@Lazy` self reference, because a
+plain `this.foo()` skips the Spring proxy and the annotation would do nothing.
+Up to 3 attempts, and only for a violation whose message mentions `immortal_id`:
+retrying the open case index or the registration key would just fail again,
+three times slower.
+
+At 60 million per prefix and the volumes in 1.1, needing attempt 2 is a
+once-in-a-lifetime event. It still gets a test.
 
 Issuance is logged as its own `IMMORTAL_ID_ISSUED` audit event, separate from the
 `STATUS_CHANGE` event for the same transition.
@@ -611,7 +740,7 @@ Do not start a phase until the previous one is confirmed running on my machine.
 | 5 | Exact license matching, hardcoded rules, synchronous | first real verification, sync is temporary |
 | 6 | Manual review console (React) plus admin endpoints | see the security note below |
 | 7 | Fuzzy name scoring, thresholds, full catalog behind Strategy | |
-| 8 | Spring Security, JWT, roles, ownership checks | |
+| 8 | Spring Security, JWT, roles, ownership checks | **done.** V10, `security/`, `AuthService`, `ApiKeyService`. See 15. |
 | 9 | Async processing, presigned uploads, OCR | non negotiable 7 satisfied here |
 | 10 | Scheduled re-verification, notifications, public API with cache and limits | |
 | 11 | Unit tests on engine and matcher, Testcontainers lifecycle tests | tests are written per phase too, this phase is for the full lifecycle suite |
@@ -647,6 +776,53 @@ an unauthenticated review queue.
 | `D6` | Where the council comes from | **The batch, asserted once at upload.** Most registers never print their own council on a row, so requiring it as a mapped column made the mapping screen unfinishable for the ordinary case. A council column stays mappable and overrides per row, for registers like Gujarat's that do print one. | `councils` seeded for all 36 states and union territories on ISO 3166-2:IN codes, which is also what NCISM embeds in `NR/AY/GA/0000001`. `registry_records.council_raw` becomes nullable, see `D7`. |
 | `D7` | `council_raw` when the council was not in the document | **Nullable.** The alternative, copying the canonical name in at promote time, fabricates a provenance record: later, that row is indistinguishable from one where the document really did say it. NULL says the true thing. `council_code` stays NOT NULL, since it is half the natural key. | `V5__council_raw_nullable.sql` |
 | `D8` | Composite source columns | **Out of scope for v1.** The NCISM registers pack four sub fields into one "registration particulars" cell. Everything in it is redundant or optional here: the state registration number is a per state serial and we key on the national number, the register name duplicates the batch council, renewable-or-permanent is not standing. That leaves `registration_date`, which is nullable and read by no rule. | Admins map the column to "ignore". Revisit when a field inside a composite cell is actually needed, as a per field regex on the profile. |
+
+## 12.2 Accounts (phase 8, shipped)
+
+Everything that acts on behalf of a person needs an account. One endpoint does
+not, and must not:
+
+| Surface | Access |
+|---|---|
+| `GET /api/v1/public/verify` | **open.** It is what a patient or an employer calls. Requiring a login to find out whether your doctor is real defeats the product. Rate limited, answers identically for an unknown and an unverified ID, returns an initial and a surname. |
+| `GET /api/v1/councils`, `/countries`, `/medical-systems` | **open.** The public verify page validates an ID against them before sending it. |
+| `POST /api/v1/auth/*` | **open.** They are how a credential is obtained. |
+| claims, own cases, account, API keys | **signed in** |
+| `/api/v1/admin/**` | **REVIEWER or ADMIN** |
+| `/api/v1/admin/imports/**` | **ADMIN.** Promoting a batch rewrites the table every verification is decided against, so it decides who counts as licensed. |
+| `/api/v1/internal/**` | **API key** (resolves `D4`, better than the shared static key it proposed: per account, individually revocable, attributable) |
+
+**Tokens.** Access token is a 15 minute HS256 JWT, never stored, verified with a
+HMAC and no database read. Refresh token is 30 days, opaque, stored as a SHA-256
+digest, and revocable. That split is the whole design: the access token is fast
+because it cannot be withdrawn, so it expires quickly, and everything that
+should end a session ends the refresh token instead. 15 minutes is therefore the
+maximum staleness of any authorization decision.
+
+**Rotation and reuse.** Every refresh issues a new token and marks the old one
+replaced. A replaced token presented again is either a retried request or a
+stolen copy, and nothing can tell those apart, so the whole family is revoked.
+
+**Password rules.** 12 characters minimum, no composition rules. Composition
+rules produce `Password1!`. The only content checks are the two an attacker
+tries first against a specific person: their own email and their own name.
+
+**Two things worth remembering, both found by running it rather than reading it:**
+
+1. `AuthService.login` and `.refresh` write and *then* throw. Without
+   `noRollbackFor`, Spring rolled those writes back, so the lockout counter reset
+   after every wrong password and reuse detection revoked nothing. Nothing
+   logged, nothing failed, right status codes throughout.
+2. `revokeAllForUser` is a `@Modifying(clearAutomatically = true)` bulk update,
+   which discards the persistence context. A `save()` before it is lost;
+   `saveAndFlush` is required. Same trap `VerificationService` documents.
+
+**Known gap.** Tokens live in `sessionStorage`, so XSS is session compromise. The
+safer shape is an httpOnly refresh cookie plus an in-memory access token, which
+costs CSRF handling. Recorded in `lib/authToken.ts` rather than presented as a
+decision.
+
+---
 
 ## 13. Out of scope for v1
 

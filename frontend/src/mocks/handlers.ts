@@ -3,9 +3,17 @@ import type { ReviewCaseDetail } from '@/features/admin-review/types'
 import type { PractitionerCaseDetail } from '@/features/verification/types'
 import { PRACTITIONER_CASES, REVIEW_CASES, VERIFIED_IMMORTAL_ID, toQueueItem } from './fixtures'
 import type { CaseStatus } from '@/types/caseStatus'
-import { COUNCILS, councilName } from './councils'
+import { COUNCILS, COUNTRIES, MEDICAL_SYSTEMS, councilCountry, councilName } from './councils'
 import { importHandlers, resetImportMockData } from './importHandlers'
-import { decide, evaluate, issueImmortalId, licenceKeys, matchClaim, normalizeName } from './verificationEngine'
+import {
+  decide,
+  evaluate,
+  issueImmortalId,
+  licenceKeys,
+  matchClaim,
+  normalizeName,
+  resetIssuedImmortalIds,
+} from './verificationEngine'
 
 /**
  * Mock API matching the designed contract.
@@ -105,6 +113,55 @@ const PASSWORDS: Record<keyof typeof ACCOUNTS, string> = {
 
 type AccountEmail = keyof typeof ACCOUNTS
 
+type MockAccount = {
+  id: string
+  email: string
+  fullName: string
+  role: 'ADMIN' | 'REVIEWER' | 'PRACTITIONER'
+  immortalId: string | null
+}
+
+/**
+ * Accounts created by signing up during this session, on top of the fixed three.
+ *
+ * Held separately from ACCOUNTS so a test that signs someone up cannot mutate
+ * the seeded accounts other tests rely on. Cleared by resetMockData.
+ */
+let registered: Record<string, MockAccount> = {}
+
+/** API keys per account, so the account screen has something to list. */
+let apiKeys: Record<string, Array<{
+  id: string
+  name: string
+  prefix: string
+  createdAt: string
+  expiresAt: string | null
+  revokedAt: string | null
+  lastUsedAt: string | null
+  status: 'ACTIVE' | 'REVOKED' | 'EXPIRED'
+}>> = {}
+
+function accountByEmail(email: string): MockAccount | null {
+  return (ACCOUNTS as Record<string, MockAccount>)[email] ?? registered[email] ?? null
+}
+
+/**
+ * The session payload, matching the real one: tokens AND the account.
+ *
+ * Returning the account here is what lets the client seed its ['me'] cache
+ * without a second round trip, so the mock has to carry it or the mocked app
+ * takes a slower path than the real one and the difference goes unnoticed.
+ */
+function sessionFor(email: string) {
+  const account = accountByEmail(email)
+  return {
+    accessToken: `${TOKEN_PREFIX}${email}`,
+    refreshToken: `mock.refresh.${email}`,
+    expiresInSeconds: 900,
+    user: { ...account, authenticatedBy: 'SESSION' },
+  }
+}
+
 /**
  * The token carries the account, so /me can answer without a session table.
  * A real JWT carries the subject the same way; this is the same idea with the
@@ -118,8 +175,8 @@ function accountFromRequest(request: Request) {
   if (!header.startsWith('Bearer ')) return null
   const token = header.slice('Bearer '.length)
   if (!token.startsWith(TOKEN_PREFIX)) return null
-  const email = token.slice(TOKEN_PREFIX.length) as AccountEmail
-  return ACCOUNTS[email] ?? null
+  const email = token.slice(TOKEN_PREFIX.length)
+  return accountByEmail(email)
 }
 
 const unauthorized = () =>
@@ -136,6 +193,9 @@ export function resetMockData(seeded = false) {
   reviewCases = seeded ? structuredClone(REVIEW_CASES) : []
   practitionerCases = seeded ? structuredClone(PRACTITIONER_CASES) : []
   issuedImmortalIds = {}
+  registered = {}
+  apiKeys = {}
+  resetIssuedImmortalIds()
   resetImportMockData(seeded)
 }
 
@@ -213,12 +273,30 @@ export const handlers = [
 
     const status = body.decision === 'APPROVE' ? 'APPROVED' : 'REJECTED'
     const decidedAt = new Date().toISOString()
+
+    // Section 8.1: issued on the FIRST approval, and never reissued. Keyed on
+    // the registration number rather than the case, so a later expiry and
+    // re-approval returns the same identifier.
+    if (status === 'APPROVED' && !issuedImmortalIds[found.claim.registrationNumber]) {
+      issuedImmortalIds[found.claim.registrationNumber] = issueImmortalId({
+        // The council is the authority for the country, not the claim. A
+        // browser that sent the wrong one must not be able to put it into a
+        // permanent identifier.
+        countryCode: councilCountry(found.claim.council),
+        medicalSystemCode: found.claim.medicalSystem || 'A',
+      })
+    }
+    const issuedId = issuedImmortalIds[found.claim.registrationNumber] ?? null
+
     reviewCases[index] = {
       ...found,
       status,
       decidedAt,
       decidedBy: 'dev.reviewer',
       decisionReason: body.reason,
+      // The console shows it too. A reviewer who just approved someone needs to
+      // see the identifier that approval created, not go looking for it.
+      immortalId: status === 'APPROVED' ? issuedId : found.immortalId,
     }
 
     /**
@@ -235,21 +313,12 @@ export const handlers = [
       const current = practitionerCases[owner] as PractitionerCaseDetail
       const approved = status === 'APPROVED'
 
-      // Section 8.1: issued on the FIRST approval, and never reissued. Keyed on
-      // the registration number rather than the case, so a later expiry and
-      // re-approval returns the same identifier.
-      if (approved && !issuedImmortalIds[current.claim.registrationNumber]) {
-        issuedImmortalIds[current.claim.registrationNumber] = issueImmortalId()
-      }
-
       practitionerCases[owner] = {
         ...current,
         status,
         outcomeCode: approved ? 'VERIFIED' : 'COULD_NOT_VERIFY',
         decidedAt,
-        immortalId: approved
-          ? (issuedImmortalIds[current.claim.registrationNumber] as string)
-          : null,
+        immortalId: approved ? issuedId : null,
         verifiedAsOf: approved ? decidedAt.slice(0, 10) : null,
         registrySourceBatch: approved ? (current.registrySourceBatch ?? 'manual-review') : null,
         progress: [
@@ -299,8 +368,155 @@ export const handlers = [
     return HttpResponse.json(found)
   }),
 
+  /**
+   * Step 1 of the wizard. Mirrors RegistryLookupService, including what it
+   * refuses to say.
+   *
+   * The masking is duplicated from the Java rather than shared, which is
+   * normally the mistake Normalizer's class comment warns about. It is
+   * tolerable here only because this file deletes when the backend lands, and
+   * because a mask that drifted would produce a visibly wrong string rather
+   * than a silent matching failure.
+   *
+   * No rate limit. The budget is a server concern and a mock that enforced it
+   * would make every twenty first test in a run fail for a reason unrelated to
+   * what it tests. Tests that need the 429 path override this handler.
+   */
+  http.post('/api/v1/verifications/lookup', async ({ request }) => {
+    const body = (await request.json()) as { council: string; registrationNumber: string }
+
+    const empty = (outcome: string) =>
+      HttpResponse.json({
+        outcome,
+        councilName: '',
+        maskedName: '',
+        standing: '',
+        asOfBatch: '',
+      })
+
+    if (!body.registrationNumber?.trim()) {
+      return HttpResponse.json(
+        {
+          code: 'BAD_REQUEST',
+          message: 'Enter your registration number.',
+          timestamp: new Date().toISOString(),
+        },
+        { status: 400 },
+      )
+    }
+
+    // fullName is irrelevant here: the lookup keys on licence and council only,
+    // and the name is the thing being withheld.
+    const candidates = matchClaim({
+      fullName: '',
+      registrationNumber: body.registrationNumber,
+      council: body.council,
+    })
+
+    if (candidates.length === 0) return empty('NOT_FOUND')
+    if (candidates.length > 1) return empty('AMBIGUOUS')
+
+    const row = candidates[0]!.row
+    return HttpResponse.json({
+      outcome: 'FOUND',
+      councilName: councilName(body.council),
+      // First character of each part, then a fixed four bullets. Fixed width so
+      // the mask carries nothing about how long the real name is.
+      maskedName: row.fullNameNormalized
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((part) => `${part[0]}••••`)
+        .join(' '),
+      // Six registry statuses collapse to three. SUSPENDED and REVOKED both
+      // arrive as NOT_ACTIVE: nobody has proved yet that they are the person on
+      // the row, so naming the sanction would disclose it to whoever guessed
+      // the number.
+      standing: row.status === 'ACTIVE' ? 'ACTIVE' : row.status === 'UNKNOWN' ? 'UNKNOWN' : 'NOT_ACTIVE',
+      asOfBatch: row.sourceBatch,
+    })
+  }),
+
+  /**
+   * Identity document upload.
+   *
+   * Mirrors the server's refusals, including the magic byte check, because the
+   * wizard's error handling is most of what this step is. What it deliberately
+   * does NOT mirror is encryption: there is nothing to encrypt against here and
+   * pretending otherwise would teach the wrong thing about where that happens.
+   */
+  http.post('/api/v1/documents', async ({ request }) => {
+    const bad = (message: string) =>
+      HttpResponse.json(
+        { code: 'BAD_REQUEST', message, timestamp: new Date().toISOString() },
+        { status: 400 },
+      )
+
+    const form = await request.formData()
+    const file = form.get('file')
+    const kind = String(form.get('kind') ?? '')
+
+    if (!(file instanceof File)) return bad('Choose a file to upload.')
+    if (!['PHOTO_ID', 'SELFIE', 'REGISTRATION_CERTIFICATE'].includes(kind)) {
+      return bad(`Unknown document kind: ${kind}`)
+    }
+    if (!['image/jpeg', 'image/png', 'application/pdf'].includes(file.type)) {
+      return bad('Upload a JPEG, PNG or PDF.')
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      return bad('That file is larger than 10 MB. Try a smaller photo.')
+    }
+
+    // The declared type is whatever the browser chose to send, so the server
+    // checks the leading bytes too, and so does this.
+    const head = new Uint8Array(await file.slice(0, 4).arrayBuffer())
+    const looksRight =
+      (file.type === 'image/jpeg' && head[0] === 0xff && head[1] === 0xd8) ||
+      (file.type === 'image/png' && head[0] === 0x89 && head[1] === 0x50) ||
+      (file.type === 'application/pdf' && head[0] === 0x25 && head[1] === 0x50)
+    if (!looksRight) {
+      return bad(`That file does not look like a ${file.type}. Upload a JPEG, PNG or PDF.`)
+    }
+
+    return HttpResponse.json({
+      documentId: crypto.randomUUID(),
+      kind,
+      sizeBytes: file.size,
+    })
+  }),
+
   http.post('/api/v1/verifications', async ({ request }) => {
     const claim = (await request.json()) as PractitionerCaseDetail['claim']
+
+    /**
+     * The council is the authority for its own country, so a claim whose two
+     * answers disagree is rejected rather than silently resolved. Either half
+     * could be the mistake, and preferring one would hide a broken form: the
+     * practitioner would end up with a permanent ID naming a country they never
+     * chose.
+     */
+    if (claim.country && councilCountry(claim.council) !== claim.country) {
+      return HttpResponse.json(
+        {
+          code: 'BAD_REQUEST',
+          message: `${councilName(claim.council)} registers in ${councilCountry(claim.council)}, not ${claim.country}`,
+          timestamp: new Date().toISOString(),
+        },
+        { status: 400 },
+      )
+    }
+
+    if (!claim.medicalSystem || !MEDICAL_SYSTEMS.some((s) => s.code === claim.medicalSystem)) {
+      return HttpResponse.json(
+        {
+          code: 'BAD_REQUEST',
+          message: `Unknown medical system code: ${claim.medicalSystem}`,
+          timestamp: new Date().toISOString(),
+        },
+        { status: 400 },
+      )
+    }
+
     const open = practitionerCases.find((c) => OPEN_STATUSES.has(c.status))
     if (open) {
       return HttpResponse.json(
@@ -340,7 +556,10 @@ export const handlers = [
      * exactly as section 8.1 requires.
      */
     if (approved && !issuedImmortalIds[claim.registrationNumber]) {
-      issuedImmortalIds[claim.registrationNumber] = issueImmortalId()
+      issuedImmortalIds[claim.registrationNumber] = issueImmortalId({
+        countryCode: councilCountry(claim.council),
+        medicalSystemCode: claim.medicalSystem ?? 'A',
+      })
     }
     const immortalId = approved ? (issuedImmortalIds[claim.registrationNumber] as string) : null
     const matched = candidates[0]?.row ?? null
@@ -391,8 +610,11 @@ export const handlers = [
           decidedAt: null,
           decidedBy: null,
           decisionReason: null,
+          immortalId: null,
           claim: {
             ...claim,
+            country: claim.country ?? '',
+            medicalSystem: claim.medicalSystem ?? '',
             normalizedName: normalizeName(claim.fullName),
             normalizedRegistrationNumber: licenceKeys(claim.registrationNumber, claim.council)[0] ?? '',
           },
@@ -459,6 +681,9 @@ export const handlers = [
     )
 
     if (!approved) {
+      // Byte for byte the same keys as a verified answer. A missing key would
+      // leak existence through the response shape rather than its values, which
+      // is the version of this bug that survives a review of the values.
       return HttpResponse.json({
         immortalId: id,
         displayName: '',
@@ -466,6 +691,9 @@ export const handlers = [
         verifiedAsOf: '',
         registrySourceBatch: '',
         council: '',
+        country: '',
+        countryCode: '',
+        medicalSystem: '',
       })
     }
 
@@ -476,6 +704,9 @@ export const handlers = [
         ? `${parts[0]?.[0]}. ${parts[parts.length - 1]}`
         : (parts[0] ?? '')
 
+    const countryCode = councilCountry(approved.claim.council)
+    const systemCode = approved.claim.medicalSystem ?? ''
+
     return HttpResponse.json({
       immortalId: id,
       displayName,
@@ -483,6 +714,11 @@ export const handlers = [
       verifiedAsOf: approved.verifiedAsOf ?? '',
       registrySourceBatch: approved.registrySourceBatch ?? '',
       council: councilName(approved.claim.council),
+      // Read from the case, not decoded from the string in the query. Decoding
+      // would make the caller's own input the source of the answer.
+      country: COUNTRIES.find((c) => c.code === countryCode)?.name ?? countryCode,
+      countryCode,
+      medicalSystem: MEDICAL_SYSTEMS.find((s) => s.code === systemCode)?.name ?? systemCode,
     })
   }),
 
@@ -499,16 +735,138 @@ export const handlers = [
         { status: 401 },
       )
     }
-    return HttpResponse.json({
-      accessToken: `${TOKEN_PREFIX}${email}`,
-      refreshToken: `mock.refresh.${email}`,
-      expiresInSeconds: 900,
-    })
+    return HttpResponse.json(sessionFor(email))
   }),
+
+  /**
+   * Signing up, mocked.
+   *
+   * Mirrors the real rules the client depends on: minimum length, duplicate
+   * detection on the normalized address, and PRACTITIONER regardless of what
+   * the body asks for. A mock that granted a role from the request would let
+   * the console's guard be tested against a lie.
+   */
+  http.post('/api/v1/auth/register', async ({ request }) => {
+    const body = (await request.json()) as {
+      email: string
+      password: string
+      fullName: string
+    }
+    const email = body.email.trim().toLowerCase()
+
+    if (!body.password || body.password.length < 12) {
+      return HttpResponse.json(
+        { code: 'BAD_REQUEST', message: 'Use a password of at least 12 characters.', timestamp: new Date().toISOString() },
+        { status: 400 },
+      )
+    }
+    if (email in ACCOUNTS || email in registered) {
+      return HttpResponse.json(
+        { code: 'EMAIL_IN_USE', message: 'An account already exists for that email address.', timestamp: new Date().toISOString() },
+        { status: 409 },
+      )
+    }
+
+    registered[email] = {
+      id: crypto.randomUUID(),
+      email,
+      fullName: body.fullName.trim(),
+      role: 'PRACTITIONER',
+      immortalId: null,
+    }
+    return HttpResponse.json(sessionFor(email), { status: 201 })
+  }),
+
+  http.post('/api/v1/auth/refresh', async ({ request }) => {
+    const body = (await request.json()) as { refreshToken?: string }
+    const email = (body.refreshToken ?? '').replace('mock.refresh.', '')
+    if (!accountByEmail(email)) return unauthorized()
+    return HttpResponse.json(sessionFor(email))
+  }),
+
+  // Always 204. A client that has decided to end its session has already
+  // discarded the credential; answering 401 only reveals whether it was live.
+  http.post('/api/v1/auth/logout', () => new HttpResponse(null, { status: 204 })),
+
+  http.post('/api/v1/auth/logout-all', ({ request }) =>
+    accountFromRequest(request) ? HttpResponse.json({ sessionsEnded: 1 }) : unauthorized(),
+  ),
 
   http.get('/api/v1/me', ({ request }) => {
     const account = accountFromRequest(request)
-    return account ? HttpResponse.json(account) : unauthorized()
+    return account
+      ? HttpResponse.json({ ...account, authenticatedBy: 'SESSION' })
+      : unauthorized()
+  }),
+
+  http.get('/api/v1/me/sessions', ({ request }) =>
+    accountFromRequest(request)
+      ? HttpResponse.json([
+          {
+            id: 'session-0000-4000-8000-000000000001',
+            issuedAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 30 * 86_400_000).toISOString(),
+            userAgent: navigator.userAgent,
+            ipAddress: '127.0.0.1',
+          },
+        ])
+      : unauthorized(),
+  ),
+
+  // ---- API keys ----------------------------------------------------------
+  http.get('/api/v1/me/api-keys', ({ request }) => {
+    const account = accountFromRequest(request)
+    if (!account) return unauthorized()
+    return HttpResponse.json(apiKeys[account.email] ?? [])
+  }),
+
+  http.post('/api/v1/me/api-keys', async ({ request }) => {
+    const account = accountFromRequest(request)
+    if (!account) return unauthorized()
+    const body = (await request.json()) as { name?: string }
+    if (!body.name?.trim()) {
+      return HttpResponse.json(
+        { code: 'BAD_REQUEST', message: 'Give the key a name you will recognise later.', timestamp: new Date().toISOString() },
+        { status: 400 },
+      )
+    }
+
+    // Generated the way the real one is, so what the screen shows here is the
+    // shape a developer will actually paste into their configuration.
+    const body36 = Array.from(crypto.getRandomValues(new Uint8Array(32)))
+      .map((b) => 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'[b % 64])
+      .join('')
+    const full = `hi_live_${body36}`
+
+    const record = {
+      id: crypto.randomUUID(),
+      name: body.name.trim(),
+      prefix: full.slice(0, 'hi_live_'.length + 6),
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(),
+      revokedAt: null,
+      lastUsedAt: null,
+      status: 'ACTIVE' as const,
+    }
+    apiKeys[account.email] = [record, ...(apiKeys[account.email] ?? [])]
+
+    // The full key exists here and nowhere else, exactly as on the server,
+    // which stores only a digest.
+    return HttpResponse.json(
+      { ...record, key: full, warning: 'Copy this key now. It cannot be shown again.' },
+      { status: 201 },
+    )
+  }),
+
+  http.delete('/api/v1/me/api-keys/:keyId', ({ request, params }) => {
+    const account = accountFromRequest(request)
+    if (!account) return unauthorized()
+    apiKeys[account.email] = (apiKeys[account.email] ?? []).map((key) =>
+      key.id === params['keyId']
+        ? { ...key, status: 'REVOKED' as const, revokedAt: new Date().toISOString() }
+        : key,
+    )
+    return new HttpResponse(null, { status: 204 })
   }),
 
   /**
@@ -522,6 +880,15 @@ export const handlers = [
    * redeploy. A hardcoded client copy defeats that, and did.
    */
   http.get('/api/v1/councils', () => HttpResponse.json(COUNCILS)),
+
+  /**
+   * The two lists that feed the Immortal ID. Same reasoning as councils, and a
+   * stronger case: a stale council list blocks a form, a stale medical system
+   * list writes the wrong character into an identifier issued once and never
+   * changed.
+   */
+  http.get('/api/v1/countries', () => HttpResponse.json(COUNTRIES)),
+  http.get('/api/v1/medical-systems', () => HttpResponse.json(MEDICAL_SYSTEMS)),
 
   // ---- registry import ---------------------------------------------------
   ...importHandlers,

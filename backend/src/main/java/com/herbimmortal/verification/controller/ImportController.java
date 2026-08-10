@@ -8,7 +8,7 @@ import com.herbimmortal.verification.extraction.ExtractionDtos.Health;
 import com.herbimmortal.verification.domain.StagingRecord;
 import org.springframework.data.domain.PageRequest;
 import com.herbimmortal.verification.service.ImportService;
-import org.springframework.context.annotation.Profile;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,25 +27,23 @@ import java.util.UUID;
 /**
  * The registry import API.
  *
- * {@code @Profile("!prod")} is load bearing, not decoration. These endpoints
- * expose the promote path and there is no authentication until phase 8, so a
- * production build must be physically unable to serve them. The build order
- * puts admin endpoints two phases before Spring Security on purpose, and this
- * annotation is the thing that makes that acceptable.
+ * ADMIN only, and not merely because import is a powerful screen. These
+ * endpoints rewrite registry_records, which is the table every verification is
+ * decided against: someone who can promote a batch can decide who is a licensed
+ * practitioner. Reviewers read that table and do not get to replace it.
  *
- * Negated rather than {@code @Profile("!prod")}, which was wrong in a way that
- * looked right: the default profile is "local", so the controller was never
- * created unless someone remembered to add "dev" by hand, and the console got a
- * 404 on every endpoint with the backend apparently running and healthy. A
- * guard that has to be remembered to be switched ON is a guard that is off.
- * Absent unless prod is active fails in the safe direction and works by
- * default.
+ * <p>This used to carry {@code @Profile("!prod")} instead. That guard existed
+ * because the build order puts admin screens two phases before Spring Security,
+ * so a production build had to be physically unable to serve an unauthenticated
+ * promote path. Phase 8 has landed: authentication is real, SecurityConfig
+ * denies by default, and the profile is gone. Keeping it would no longer be
+ * protection, it would just mean imports could never run in production.
  *
- * The controller validates, maps and returns status codes. Nothing else.
+ * <p>The controller validates, maps and returns status codes. Nothing else.
  */
 @RestController
 @RequestMapping("/api/v1/admin/imports")
-@Profile("!prod")
+@PreAuthorize("hasRole('ADMIN')")
 public class ImportController {
 
     private final ImportService imports;

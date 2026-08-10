@@ -18,47 +18,88 @@
 export interface CouncilRow {
   code: string
   canonicalName: string
+  /** V9. Every seeded council is Indian, so this is 'IN' for all of them today. */
+  countryCode: string
 }
 
+const IN = 'IN'
+
 export const COUNCILS: CouncilRow[] = [
-  { code: 'AN', canonicalName: 'Andaman and Nicobar Islands' },
-  { code: 'AP', canonicalName: 'Andhra Pradesh' },
-  { code: 'AR', canonicalName: 'Arunachal Pradesh' },
-  { code: 'AS', canonicalName: 'Assam' },
-  { code: 'BR', canonicalName: 'Bihar' },
-  { code: 'CH', canonicalName: 'Chandigarh' },
-  { code: 'CT', canonicalName: 'Chhattisgarh' },
-  { code: 'DH', canonicalName: 'Dadra and Nagar Haveli and Daman and Diu' },
-  { code: 'DL', canonicalName: 'Delhi' },
-  { code: 'GA', canonicalName: 'Goa Board of Indian System of Medicine and Homoeopathy' },
-  { code: 'GJ', canonicalName: 'Gujarat Board of Ayurvedic and Unani Systems of Medicine' },
-  { code: 'HR', canonicalName: 'Haryana' },
-  { code: 'HP', canonicalName: 'Himachal Pradesh' },
-  { code: 'JK', canonicalName: 'Jammu and Kashmir' },
-  { code: 'JH', canonicalName: 'Jharkhand' },
-  { code: 'KA', canonicalName: 'Karnataka Ayurvedic and Unani Practitioners Board' },
-  { code: 'KL', canonicalName: 'Kerala State Medical Council (Indian Systems of Medicine)' },
-  { code: 'LA', canonicalName: 'Ladakh' },
-  { code: 'LD', canonicalName: 'Lakshadweep' },
-  { code: 'MP', canonicalName: 'Madhya Pradesh' },
-  { code: 'MH', canonicalName: 'Maharashtra Council of Indian Medicine' },
-  { code: 'MN', canonicalName: 'Manipur' },
-  { code: 'ML', canonicalName: 'Meghalaya' },
-  { code: 'MZ', canonicalName: 'Mizoram' },
-  { code: 'NL', canonicalName: 'Nagaland' },
-  { code: 'OR', canonicalName: 'Odisha' },
-  { code: 'PY', canonicalName: 'Puducherry' },
-  { code: 'PB', canonicalName: 'Punjab' },
-  { code: 'RJ', canonicalName: 'Rajasthan' },
-  { code: 'SK', canonicalName: 'Sikkim' },
-  { code: 'TN', canonicalName: 'Tamil Nadu' },
-  { code: 'TG', canonicalName: 'Telangana' },
-  { code: 'TR', canonicalName: 'Tripura' },
-  { code: 'UP', canonicalName: 'Uttar Pradesh' },
-  { code: 'UT', canonicalName: 'Uttarakhand' },
-  { code: 'WB', canonicalName: 'West Bengal' },
+  { code: 'AN', canonicalName: 'Andaman and Nicobar Islands', countryCode: IN },
+  { code: 'AP', canonicalName: 'Andhra Pradesh', countryCode: IN },
+  { code: 'AR', canonicalName: 'Arunachal Pradesh', countryCode: IN },
+  { code: 'AS', canonicalName: 'Assam', countryCode: IN },
+  { code: 'BR', canonicalName: 'Bihar', countryCode: IN },
+  { code: 'CH', canonicalName: 'Chandigarh', countryCode: IN },
+  { code: 'CT', canonicalName: 'Chhattisgarh', countryCode: IN },
+  { code: 'DH', canonicalName: 'Dadra and Nagar Haveli and Daman and Diu', countryCode: IN },
+  { code: 'DL', canonicalName: 'Delhi', countryCode: IN },
+  { code: 'GA', canonicalName: 'Goa Board of Indian System of Medicine and Homoeopathy', countryCode: IN },
+  { code: 'GJ', canonicalName: 'Gujarat Board of Ayurvedic and Unani Systems of Medicine', countryCode: IN },
+  { code: 'HR', canonicalName: 'Haryana', countryCode: IN },
+  { code: 'HP', canonicalName: 'Himachal Pradesh', countryCode: IN },
+  { code: 'JK', canonicalName: 'Jammu and Kashmir', countryCode: IN },
+  { code: 'JH', canonicalName: 'Jharkhand', countryCode: IN },
+  { code: 'KA', canonicalName: 'Karnataka Ayurvedic and Unani Practitioners Board', countryCode: IN },
+  { code: 'KL', canonicalName: 'Kerala State Medical Council (Indian Systems of Medicine)', countryCode: IN },
+  { code: 'LA', canonicalName: 'Ladakh', countryCode: IN },
+  { code: 'LD', canonicalName: 'Lakshadweep', countryCode: IN },
+  { code: 'MP', canonicalName: 'Madhya Pradesh', countryCode: IN },
+  { code: 'MH', canonicalName: 'Maharashtra Council of Indian Medicine', countryCode: IN },
+  { code: 'MN', canonicalName: 'Manipur', countryCode: IN },
+  { code: 'ML', canonicalName: 'Meghalaya', countryCode: IN },
+  { code: 'MZ', canonicalName: 'Mizoram', countryCode: IN },
+  { code: 'NL', canonicalName: 'Nagaland', countryCode: IN },
+  { code: 'OR', canonicalName: 'Odisha', countryCode: IN },
+  { code: 'PY', canonicalName: 'Puducherry', countryCode: IN },
+  { code: 'PB', canonicalName: 'Punjab', countryCode: IN },
+  { code: 'RJ', canonicalName: 'Rajasthan', countryCode: IN },
+  { code: 'SK', canonicalName: 'Sikkim', countryCode: IN },
+  { code: 'TN', canonicalName: 'Tamil Nadu', countryCode: IN },
+  { code: 'TG', canonicalName: 'Telangana', countryCode: IN },
+  { code: 'TR', canonicalName: 'Tripura', countryCode: IN },
+  { code: 'UP', canonicalName: 'Uttar Pradesh', countryCode: IN },
+  { code: 'UT', canonicalName: 'Uttarakhand', countryCode: IN },
+  { code: 'WB', canonicalName: 'West Bengal', countryCode: IN },
 ]
 
 export function councilName(code: string): string {
   return COUNCILS.find((c) => c.code === code)?.canonicalName ?? code
 }
+
+export function councilCountry(code: string): string {
+  return COUNCILS.find((c) => c.code === code)?.countryCode ?? IN
+}
+
+/**
+ * Mirrors the countries table seeded by V9. ISO 3166-1 alpha-2, and the code is
+ * the CC segment of an Immortal ID verbatim.
+ */
+export const COUNTRIES = [
+  { code: 'AU', name: 'Australia' },
+  { code: 'BD', name: 'Bangladesh' },
+  { code: 'CA', name: 'Canada' },
+  { code: 'CN', name: 'China' },
+  { code: 'IN', name: 'India' },
+  { code: 'MY', name: 'Malaysia' },
+  { code: 'NP', name: 'Nepal' },
+  { code: 'NZ', name: 'New Zealand' },
+  { code: 'SG', name: 'Singapore' },
+  { code: 'ZA', name: 'South Africa' },
+  { code: 'LK', name: 'Sri Lanka' },
+  { code: 'AE', name: 'United Arab Emirates' },
+  { code: 'GB', name: 'United Kingdom' },
+  { code: 'US', name: 'United States' },
+] as const
+
+/**
+ * Mirrors medical_systems. In sort_order, not alphabetical: Ayurveda leads the
+ * list it dominates rather than sitting between TCM and Unani.
+ */
+export const MEDICAL_SYSTEMS = [
+  { code: 'A', name: 'Ayurveda' },
+  { code: 'S', name: 'Siddha' },
+  { code: 'U', name: 'Unani' },
+  { code: 'Y', name: 'Yoga' },
+  { code: 'T', name: 'Traditional Chinese Medicine' },
+] as const

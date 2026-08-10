@@ -1,95 +1,205 @@
 /**
- * Immortal ID format and check character.
+ * Immortal ID format: HI-YYCCM-RRRRR, for example HI-26INA-K3M7Q.
  *
- * HI-XXXXX-XXXXX: nine random Crockford base32 characters plus one check
- * character, grouped five and five so it reads aloud in two chunks like an
- * airline record locator.
+ *   HI - 26 IN A - K3M7Q
+ *   │    │  │  │   └───── five random characters, A-Z and 0-9
+ *   │    │  │  └───────── medical system code: A S U Y T
+ *   │    │  └──────────── ISO 3166-1 alpha-2 country
+ *   │    └─────────────── last two digits of the registration year
+ *   └──────────────────── fixed platform prefix
  *
- * Nine random characters is 45 bits, about 3.5e13. The rejected six character
- * form was 32^6, roughly 1.07 billion, which a scraper at a thousand requests a
- * second walks a meaningful fraction of. At 45 bits enumeration is off the
- * table and the rate limiter goes back to being a second line of defence rather
- * than the only one.
+ * This file is the client side of one rule, not a second implementation of it.
+ * It exists to catch a typo before a request goes out; the server validates
+ * again and is the authority. It has to stay in step with
+ * com.herbimmortal.verification.util.ImmortalId.
  *
- * The check character is Luhn mod 32 over the standard Crockford alphabet, not
- * Crockford's own mod 37 check symbol, whose alphabet includes * ~ $ = and U.
- * Those read as corruption on a printed certificate. Luhn mod 32 catches every
- * single character error and almost every adjacent transposition while keeping
- * the ID in one clean character set.
+ * WHAT CHANGED, AND WHAT IT COST
  *
- * This file must stay in step with the Java generator. It is the client side of
- * one rule, not a second implementation of it: the server validates again.
+ * The previous format was nine random Crockford base32 characters plus a Luhn
+ * mod 32 check character. That check character could catch every single
+ * character error in the browser, so a mistyped ID never reached the server and
+ * the person got told which part was wrong. This format spends those characters
+ * on meaning instead: four of them now say when, where and what system, which a
+ * support agent can read off the page without a database.
+ *
+ * The price is real and worth stating plainly. Without a check character,
+ * looksLikeImmortalId can only verify the shape. A typo inside the random
+ * segment is indistinguishable from someone else's valid ID, so it goes to the
+ * server and comes back "not currently verified" rather than "you mistyped
+ * that". validateImmortalId below recovers part of that by checking the fixed
+ * segments against real reference data, which is the only signal left.
  */
-const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
-const BASE = ALPHABET.length
+
+/** A-Z and 0-9. Not Crockford: I, L, O and U are all legal in this format. */
+const SUFFIX_ALPHABET = /^[A-Z0-9]{5}$/
+
+/** HI-YYCCM-RRRRR, anchored so a longer string is not a partial match. */
+const SHAPE = /^HI-(\d{2})([A-Z]{2})([A-Z])-([A-Z0-9]{5})$/
 
 /**
- * Crockford decoding is case insensitive and forgiving of the characters people
- * actually mistype: I and L read as 1, O reads as 0.
+ * The pre-2026 format: nine Crockford characters plus a Luhn mod 32 check
+ * character, grouped five and five.
+ *
+ * Still recognised because an Immortal ID is permanent (section 8.1). An ID
+ * printed on a certificate before the format changed has to keep resolving,
+ * even though nothing can issue another one. Postgres says the same thing a
+ * different way: V9 adds the format CHECK as NOT VALID, which applies to new
+ * writes and leaves existing rows alone.
  */
-export function normalizeCrockford(input: string): string {
-  return input
-    .toUpperCase()
-    .replace(/[IL]/g, '1')
-    .replace(/O/g, '0')
+const LEGACY_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
+const LEGACY_SHAPE = /^HI-[0-9A-Z]{5}-[0-9A-Z]{5}$/
+
+export interface ImmortalIdParts {
+  /** Full year, reconstructed from the two digits. */
+  year: number
+  countryCode: string
+  medicalSystemCode: string
+  suffix: string
 }
 
-function valueOf(char: string): number {
-  return ALPHABET.indexOf(char)
+/** Uppercases and drops surrounding space. Does not repair anything else. */
+export function canonicalize(input: string): string {
+  return input.trim().toUpperCase()
 }
 
-/** Luhn mod N over the Crockford alphabet. Payload is the nine random chars. */
-export function checkCharacter(payload: string): string {
+/**
+ * Shape only. True for the current format, false for a legacy ID.
+ *
+ * Use this before writing an ID anywhere. Use looksLikeImmortalId to decide
+ * whether a lookup is worth sending.
+ */
+export function isCurrentFormat(input: string): boolean {
+  return SHAPE.test(canonicalize(input))
+}
+
+/** Luhn mod 32 over the Crockford alphabet. Reads legacy IDs, never writes one. */
+function legacyCheckCharacter(payload: string): string {
+  const base = LEGACY_ALPHABET.length
   let sum = 0
   let factor = 2
 
   for (let i = payload.length - 1; i >= 0; i -= 1) {
-    const char = payload[i]
-    if (char === undefined) continue
-    const value = valueOf(char)
-    if (value < 0) throw new Error(`Character outside the Crockford alphabet: ${char}`)
-
+    const value = LEGACY_ALPHABET.indexOf(payload[i] as string)
+    if (value < 0) return ''
     let addend = factor * value
     factor = factor === 2 ? 1 : 2
-    addend = Math.floor(addend / BASE) + (addend % BASE)
+    addend = Math.floor(addend / base) + (addend % base)
     sum += addend
   }
 
-  const remainder = sum % BASE
-  const checkValue = (BASE - remainder) % BASE
-  return ALPHABET.charAt(checkValue)
+  return LEGACY_ALPHABET.charAt((base - (sum % base)) % base)
 }
-
-const SHAPE = /^HI-[0-9A-Z]{5}-[0-9A-Z]{5}$/
 
 /**
- * Full validation: shape, alphabet, and check character. Runs before any
- * request so a malformed ID never reaches the database.
+ * True for an ID issued under the old scheme, verified through its check
+ * character rather than by shape.
+ *
+ * Shape alone would accept HI-26INA-K3M7Q as legacy, and then a typo in a
+ * current ID could pass as a valid old one. The check character is the only
+ * thing that separates the two formats, because both are HI-XXXXX-XXXXX.
+ */
+export function isLegacyFormat(input: string): boolean {
+  const candidate = canonicalize(input)
+  if (!LEGACY_SHAPE.test(candidate)) return false
+
+  const body = candidate.slice(3).replace('-', '')
+  if ([...body].some((char) => !LEGACY_ALPHABET.includes(char))) return false
+  return legacyCheckCharacter(body.slice(0, 9)) === body.charAt(9)
+}
+
+/**
+ * True for anything this system could have issued, either format.
+ *
+ * This is what the public lookup form checks. It is a load control, not a
+ * security control: it stops a request that could never match, and nothing more.
  */
 export function looksLikeImmortalId(input: string): boolean {
-  // Uppercase only at this point. Crockford decoding must NOT touch the literal
-  // "HI-" prefix, because it maps I to 1 and would turn every ID into "H1-".
-  const candidate = input.trim().toUpperCase()
-  if (!SHAPE.test(candidate)) return false
-
-  const body = normalizeCrockford(candidate.slice(3).replace('-', ''))
-  if (body.length !== 10) return false
-  if ([...body].some((char) => valueOf(char) < 0)) return false
-
-  const payload = body.slice(0, 9)
-  const check = body.charAt(9)
-  return checkCharacter(payload) === check
+  return isCurrentFormat(input) || isLegacyFormat(input)
 }
 
-/** Formats a raw ten character body into display form. */
-export function formatImmortalId(body: string): string {
-  const clean = normalizeCrockford(body).replace(/-/g, '')
-  return `HI-${clean.slice(0, 5)}-${clean.slice(5, 10)}`
+/**
+ * Decodes the fixed segments.
+ *
+ * Null for a legacy ID, which carries none of them. That is a real difference
+ * and callers have to see it rather than be handed a fabricated year.
+ */
+export function parseImmortalId(input: string): ImmortalIdParts | null {
+  const match = SHAPE.exec(canonicalize(input))
+  if (!match) return null
+
+  return {
+    year: 2000 + Number(match[1]),
+    countryCode: match[2] as string,
+    medicalSystemCode: match[3] as string,
+    suffix: match[4] as string,
+  }
 }
 
-/** Builds a valid ID from nine payload characters, appending the check char. */
-export function buildImmortalId(payload: string): string {
-  if (payload.length !== 9) throw new Error('Payload must be nine characters')
-  const normalized = normalizeCrockford(payload)
-  return formatImmortalId(normalized + checkCharacter(normalized))
+/**
+ * Builds an ID from its parts. Used by fixtures and by the landing page sample,
+ * never to issue a real one: issuance is the server's job, because only the
+ * server can check the value is free.
+ */
+export function buildImmortalId(
+  year: number,
+  countryCode: string,
+  medicalSystemCode: string,
+  suffix: string,
+): string {
+  const country = countryCode.trim().toUpperCase()
+  const system = medicalSystemCode.trim().toUpperCase()
+  const random = suffix.trim().toUpperCase()
+
+  if (year < 2000 || year > 2099) {
+    // Two digits cannot say which century, and guessing puts a wrong but
+    // plausible year into a permanent identifier.
+    throw new Error(`Year ${year} is outside the range two digits can express`)
+  }
+  if (!/^[A-Z]{2}$/.test(country)) throw new Error(`Country code must be two letters: ${countryCode}`)
+  if (!/^[A-Z]$/.test(system)) throw new Error(`Medical system code must be one letter: ${medicalSystemCode}`)
+  if (!SUFFIX_ALPHABET.test(random)) throw new Error(`Suffix must be five of A-Z or 0-9: ${suffix}`)
+
+  return `HI-${String(year % 100).padStart(2, '0')}${country}${system}-${random}`
+}
+
+/**
+ * The strongest check the browser can make, given there is no check character.
+ *
+ * Shape catches the obvious. Beyond that the only signal left is whether the
+ * fixed segments name things that exist, so this takes the reference data the
+ * page already loaded and uses it: a country code we do not hold a register for,
+ * or a medical system that is not one of ours, cannot be an ID we issued. Both
+ * lists are optional, and an unknown code is only rejected when the list is
+ * actually loaded. Rejecting on an empty list would fail every ID while the
+ * reference data was still in flight.
+ *
+ * Returns a message rather than a boolean so the form can say which part is
+ * wrong, which is the closest this format gets to what the check character used
+ * to do for free.
+ */
+export function validateImmortalId(
+  input: string,
+  reference?: { countryCodes?: readonly string[]; medicalSystemCodes?: readonly string[] },
+): string | null {
+  const candidate = canonicalize(input)
+  if (!candidate) return 'Enter an Immortal ID.'
+
+  if (isLegacyFormat(candidate)) return null
+
+  const parts = parseImmortalId(candidate)
+  if (!parts) {
+    return 'That is not a valid Immortal ID. The format is HI-26INA-K3M7Q.'
+  }
+
+  const countries = reference?.countryCodes
+  if (countries && countries.length > 0 && !countries.includes(parts.countryCode)) {
+    return `We do not hold a register for country ${parts.countryCode}.`
+  }
+
+  const systems = reference?.medicalSystemCodes
+  if (systems && systems.length > 0 && !systems.includes(parts.medicalSystemCode)) {
+    return `${parts.medicalSystemCode} is not a medical system we issue IDs for.`
+  }
+
+  return null
 }

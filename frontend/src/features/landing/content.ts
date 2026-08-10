@@ -31,7 +31,7 @@ export const SPEC_ROWS: Array<[string, string]> = [
   ['Registry', 'All states and union territories'],
   ['Throughput', 'Under 500 claims / day'],
   ['Decision', 'Rules, then a human'],
-  ['Identifier', 'HI-XXXXX-XXXXX'],
+  ['Identifier', 'HI-YYCCM-RRRRR'],
   ['Version', 'Contract v1'],
 ]
 
