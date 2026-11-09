@@ -24,4 +24,4 @@ export type CaseStatus = (typeof CASE_STATUS)[number]
 export const RULE_OUTCOME = ['PASS', 'REVIEW', 'FAIL', 'SKIPPED'] as const
 export type RuleOutcome = (typeof RULE_OUTCOME)[number]
 
-export type Role = 'PRACTITIONER' | 'REVIEWER' | 'ADMIN'
+export type Role = 'PRACTITIONER' | 'DEVELOPER' | 'REVIEWER' | 'ADMIN'

@@ -18,6 +18,9 @@ public enum Role {
     /** The default for anyone who signs up. Can claim a registration and read their own cases. */
     PRACTITIONER,
 
+    /** Owns a partner organization. Does not grant reviewer or administrator access. */
+    DEVELOPER,
+
     /** Works the review queue. Sees claims and registry rows, cannot import registers. */
     REVIEWER,
 
