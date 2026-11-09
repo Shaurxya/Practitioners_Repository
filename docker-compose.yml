@@ -104,7 +104,7 @@ services:
     # storage layer under a government ID changes version on whichever day
     # somebody happens to rebuild. A digest is the only reference that cannot
     # silently become a different image.
-    image: minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    image: cgr.dev/chainguard/minio:latest
     container_name: verification-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
@@ -127,7 +127,7 @@ services:
     healthcheck:
       # "Container started" and "MinIO is ready to serve" are different moments.
       # Spring creates the bucket at startup and needs the second one.
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/minio/health/live || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 10
