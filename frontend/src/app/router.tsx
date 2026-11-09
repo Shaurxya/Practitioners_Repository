@@ -15,6 +15,7 @@ import { LandingPage } from '@/features/landing/components/LandingPage'
 import { AboutPage } from '@/features/about/components/AboutPage'
 import { DeveloperPage } from '@/features/developer/components/DeveloperPage'
 import { RequireAdmin } from '@/features/auth/components/RequireAdmin'
+import { PublishingLoginPage } from '@/features/auth/components/PublishingLoginPage'
 import { RequireAuth } from '@/features/auth/components/RequireAuth'
 import { ImportListPage } from '@/features/registry-import/components/ImportListPage'
 import { RegistryPage } from '@/features/registry-import/components/RegistryPage'
@@ -76,6 +77,7 @@ export const routes = [
           { path: 'cases', element: <MyCasesPage /> },
           { path: 'cases/:caseId', element: <CaseStatusPage /> },
           { path: 'account', element: <AccountPage /> },
+          { path: 'publishing/confirm', element: <PublishingLoginPage /> },
         ],
       },
 
