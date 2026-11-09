@@ -1,0 +1,33 @@
+# Public, deliberately fake fixtures. The startup guard refuses these outside test.
+# Surefire disables root .env imports, so tests cannot inherit developer secrets.
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:15433/verification_test}
+    username: ${DB_USERNAME:verification_test}
+    password: ${DB_PASSWORD:herbimmortal-test-only-postgres}
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: validate
+
+app:
+  auth:
+    secret: aGVyYmltbW9ydGFsLXRlc3Qtb25seS1zaWduaW5nLWtleS1ub3QtZm9yLXByb2R1Y3Rpb24=
+    bootstrap-admin-email: ""
+    bootstrap-admin-password: ""
+  documents:
+    master-key: aGVyYmltbW9ydGFsLXRlc3Qtb25seS1tYXN0ZXIta2U=
+    endpoint: ${MINIO_ENDPOINT:http://localhost:19000}
+    access-key: ${MINIO_ROOT_USER:verification-test}
+    secret-key: ${MINIO_ROOT_PASSWORD:herbimmortal-test-only-storage}
+    bucket: verification-test-documents
+
+PUBLISHING_CLIENT_ID: publishing-org
+PUBLISHING_REDIRECT_URI: http://localhost:5001/api/auth/immortal/callback
+PUBLISHING_ISSUER: http://localhost:8080
+PUBLISHING_CLIENT_SECRET_SHA256: aaa443120c3126decc3d65a9cd4b6700a525f1ee5fa6233a6189f119cc077c5d
+
+logging:
+  level:
+    org.hibernate.orm.jdbc.bind: OFF
+    org.springframework.jdbc.core: WARN

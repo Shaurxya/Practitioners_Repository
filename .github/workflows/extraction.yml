@@ -1,0 +1,48 @@
+name: extraction
+
+on:
+  push:
+    branches: [main]
+    paths: ['extraction/**', 'pytest.ini', 'tools/ci/**', '.github/workflows/extraction.yml']
+  pull_request:
+    paths: ['extraction/**', 'pytest.ini', 'tools/ci/**', '.github/workflows/extraction.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TEST_REGISTER_PDF: ${{ github.workspace }}/ci-reports/synthetic-register.pdf
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: |
+            extraction/requirements.txt
+            extraction/requirements-test.txt
+      - run: python -m pip install -r extraction/requirements-test.txt
+      - name: Generate synthetic fixture for PDF-dependent tests
+        run: python tools/ci/make_test_register.py "$TEST_REGISTER_PDF"
+      - name: Test extraction without Paddle models
+        run: python -m pytest extraction/tests -v --junitxml=ci-reports/extraction.xml
+      - name: Require PDF and mocked-OCR coverage with zero skips
+        if: always()
+        run: |
+          python tools/ci/check_test_reports.py ci-reports \
+            --required extraction.tests.test_extraction.TestAgainstARealRegister
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: extraction-test-reports
+          path: ci-reports/*.xml
+          if-no-files-found: error
+          retention-days: 7

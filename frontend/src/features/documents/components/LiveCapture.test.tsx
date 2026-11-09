@@ -22,7 +22,7 @@ let tracks: Array<{ stop: ReturnType<typeof vi.fn> }> = []
 function fakeCamera(behaviour: 'grants' | 'denies' | 'missing' | 'busy' = 'grants') {
   // The parameter is declared so the mock's call signature carries it, which is
   // what lets a test read back the constraints it was asked for.
-  const getUserMedia = vi.fn(async (_constraints: MediaStreamConstraints) => {
+  const getUserMedia = vi.fn<(constraints: MediaStreamConstraints) => Promise<MediaStream>>(async () => {
     if (behaviour === 'denies') throw Object.assign(new Error('no'), { name: 'NotAllowedError' })
     if (behaviour === 'missing') throw Object.assign(new Error('no'), { name: 'NotFoundError' })
     if (behaviour === 'busy') throw Object.assign(new Error('no'), { name: 'NotReadableError' })

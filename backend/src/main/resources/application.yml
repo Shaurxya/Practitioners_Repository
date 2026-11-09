@@ -30,9 +30,9 @@ spring:
   # A platform injecting DB_PASSWORD always wins over anything in a file.
   # ---------------------------------------------------------------------------
   config:
-    import:
-      - optional:file:../.env[.properties]
-      - optional:file:./.env[.properties]
+    # Tests replace this placeholder, rather than attempting to override an
+    # import after ConfigData has already read the document containing it.
+    import: "${APP_ENV_IMPORTS:optional:file:../.env[.properties],optional:file:./.env[.properties]}"
 
   # Which extra file to layer on. Override with the SPRING_PROFILES_ACTIVE
   # environment variable, or -Dspring-boot.run.profiles=<name>.

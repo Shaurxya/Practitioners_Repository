@@ -24,6 +24,10 @@ yarn-error.log*
 # Vitest and Vite caches
 .vitest/
 *.tsbuildinfo
+ci-reports/
+__pycache__/
+*.py[cod]
+.pytest_cache/
 
 # --------------------------------------------------------------------- IDE
 # IntelliJ IDEA

@@ -3,29 +3,45 @@ name: frontend
 on:
   push:
     branches: [main]
-    paths: ['frontend/**', '.github/workflows/frontend.yml']
+    paths: ['frontend/**', 'tools/ci/**', '.github/workflows/frontend.yml']
   pull_request:
-    paths: ['frontend/**', '.github/workflows/frontend.yml']
+    paths: ['frontend/**', 'tools/ci/**', '.github/workflows/frontend.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
+    # Practitioner and administrator routes share this single React application.
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: frontend
-
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: '22'
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '24'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-
-      # ci, not install: fails if package-lock.json is out of sync with package.json.
       - run: npm ci
-
       - run: npm run typecheck
-      - run: npm run test
+      - run: npm run lint
+      - run: npm test -- --reporter=default --reporter=junit --outputFile=../ci-reports/frontend.xml
+      - name: Require zero skips and nonempty test reports
+        if: always()
+        working-directory: .
+        run: python3 tools/ci/check_test_reports.py ci-reports
       - run: npm run build
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: frontend-test-reports
+          path: ci-reports/
+          if-no-files-found: error
+          retention-days: 7

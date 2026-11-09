@@ -177,6 +177,18 @@
 
   <build>
     <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <failIfNoTests>true</failIfNoTests>
+          <systemPropertyVariables>
+            <spring.profiles.active>test</spring.profiles.active>
+            <!-- Resolve the import placeholder to an absent optional test resource. -->
+            <APP_ENV_IMPORTS>optional:classpath:ci-no-dotenv.properties</APP_ENV_IMPORTS>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
       <!-- Adds the `spring-boot:run` goal and builds an executable fat jar
            containing the app, its dependencies, and the embedded Tomcat. -->
       <plugin>

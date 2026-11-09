@@ -43,7 +43,7 @@ export function ReviewQueuePage() {
   const query = useReviewQueue(filter)
   const searchRef = useRef<HTMLInputElement>(null)
 
-  const rows = query.data?.content ?? []
+  const rows = useMemo(() => query.data?.content ?? [], [query.data?.content])
   const [selected, setSelected] = useState(0)
 
   useEffect(() => {
